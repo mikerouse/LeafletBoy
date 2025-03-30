@@ -2,263 +2,169 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Political Canvasser</title>
+  <title>Political Canvasser with Phaser 3 - Results & Fireworks</title>
   <style>
-    /* Retro style CSS */
-    body {
-      margin: 0;
-      background: #000;
-      color: #fff;
-      font-family: 'Press Start 2P', monospace;
-      overflow: hidden;
-    }
-    canvas {
-      display: block;
-      margin: 0 auto;
-    }
-    #menu, #playAgainContainer {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-    }
-    #menu button, #playAgainButton {
-      font-family: 'Press Start 2P', monospace;
-      font-size: 16px;
-      margin: 5px;
-      padding: 10px 20px;
-      cursor: pointer;
-      border: none;
-    }
-    #playAgainContainer {
-      display: none;
-    }
+    body { margin: 0; }
+    canvas { display: block; margin: 0 auto; }
   </style>
+  <!-- Import Phaser 3 from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
 </head>
 <body>
-  <!-- Party selection menu -->
-  <div id="menu">
-    <h1>Choose Your Party</h1>
-    <button data-party="blue" style="background: blue; color: white;">Blue</button>
-    <button data-party="red" style="background: red; color: white;">Red</button>
-    <button data-party="yellow" style="background: yellow; color: black;">Yellow</button>
-    <button data-party="green" style="background: green; color: white;">Green</button>
-  </div>
-  <!-- Play Again button container -->
-  <div id="playAgainContainer">
-    <button id="playAgainButton">Play Again</button>
-  </div>
-  <!-- Main game canvas -->
-  <canvas id="gameCanvas" width="800" height="600"></canvas>
-  
-  <script>
-    // Get canvas and context
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+<script>
+  let playerParty = null;
 
-    // Game variables
-    let partyChoice = null;
-    let totalVotes = { blue: 0, red: 0, yellow: 0, green: 0 };
-    let gameOver = false;
-    let gameStarted = false;
-    let worldOffset = 0;
-    const houseSpacing = 300; // spacing between houses in world coordinates
-    const totalHouses = 10;
-    let houses = [];
-    let activeLeaflet = null;
-
-    // Player object (canvasser)
-    const player = {
-      x: 100,
-      y: canvas.height - 100,
-      width: 30,
-      height: 30,
-      speed: 5,
-      lives: 3
-    };
-
-    // Keyboard state
-    const keys = {};
-
-    // Listen for keyboard events
-    document.addEventListener('keydown', function(e) {
-      keys[e.key] = true;
-      // Space bar to throw a leaflet
-      if (e.key === ' ' && !activeLeaflet && gameStarted && !gameOver) {
-        throwLeaflet();
-      }
-    });
-    document.addEventListener('keyup', function(e) {
-      keys[e.key] = false;
-    });
-
-    // Party selection from menu
-    document.querySelectorAll('#menu button').forEach(button => {
-      button.addEventListener('click', () => {
-        partyChoice = button.getAttribute('data-party');
-        document.getElementById('menu').style.display = 'none';
-        gameStarted = true;
-        initGame();
+  // Menu Scene: Party selection
+  class MenuScene extends Phaser.Scene {
+    constructor() {
+      super({ key: 'MenuScene' });
+    }
+    create() {
+      const centerX = this.cameras.main.width / 2;
+      const centerY = this.cameras.main.height / 2;
+      this.add.text(centerX, centerY - 100, 'Choose Your Party', { font: '32px Arial', fill: '#fff' }).setOrigin(0.5);
+      const parties = ['blue', 'red', 'yellow', 'green'];
+      parties.forEach((party, index) => {
+        let btn = this.add.text(centerX, centerY - 20 + index * 50, party.toUpperCase(), { font: '28px Arial', fill: party });
+        btn.setOrigin(0.5);
+        btn.setInteractive();
+        btn.on('pointerdown', () => {
+          playerParty = party;
+          this.scene.start('GameScene');
+        });
       });
-    });
-
-    // Play Again button event
-    document.getElementById('playAgainButton').addEventListener('click', () => {
-      document.getElementById('playAgainContainer').style.display = 'none';
-      initGame();
-    });
-
-    // Initialise houses along the street with random vertical positions
-    function initHouses() {
-      houses = [];
-      for (let i = 0; i < totalHouses; i++) {
-        let house = {
-          // Houses are placed along the world x coordinate
-          x: 800 + i * houseSpacing, // start off-screen to the right
-          // Random vertical position between 250 and 450
-          y: Math.floor(Math.random() * (450 - 250 + 1)) + 250,
-          width: 80,
-          height: 100,
-          votes: Math.floor(Math.random() * 4) + 1, // 1 to 4 votes
-          hit: false,       // whether the leaflet hit the letterbox
-          distribution: null, // will be computed once the house is passed
-          // Define letterbox area (target) relative to house.x and house.y
-          letterbox: {
-            x: 30,  // relative horizontal offset
-            y: 70,  // relative vertical offset
-            width: 20,
-            height: 15
-          },
-          evaluated: false,  // ensure each house is tallied only once
-          collidedWithPlayer: false  // track if this house has already harmed the player
-        };
-        houses.push(house);
-      }
     }
+  }
 
-    // Start or restart the game
-    function initGame() {
-      initHouses();
-      totalVotes = { blue: 0, red: 0, yellow: 0, green: 0 };
-      worldOffset = 0;
-      gameOver = false;
-      activeLeaflet = null;
-      // Reset player position and lives
-      player.y = canvas.height - 100;
-      player.lives = 3;
-      requestAnimationFrame(gameLoop);
+  // Game Scene: Main gameplay and results display.
+  class GameScene extends Phaser.Scene {
+    constructor() {
+      super({ key: 'GameScene' });
     }
+    preload() {
+      // Create player texture (white square 30x30).
+      this.add.graphics()
+        .fillStyle(0xffffff)
+        .fillRect(0, 0, 30, 30)
+        .generateTexture('player', 30, 30)
+        .destroy();
 
-    // Function to throw a leaflet from the player's position
-    function throwLeaflet() {
-      activeLeaflet = {
-        x: player.x + player.width,
-        y: player.y + player.height / 2,
-        radius: 5,
-        speed: 8
-      };
+      // Create house texture with door and letterbox.
+      let houseGfx = this.add.graphics();
+      houseGfx.fillStyle(0x888888);
+      houseGfx.fillRect(0, 20, 80, 80);
+      houseGfx.fillStyle(0x444444);
+      houseGfx.fillTriangle(0, 20, 40, -10, 80, 20);
+      houseGfx.fillStyle(0x654321);
+      houseGfx.fillRect(30, 60, 20, 40);
+      houseGfx.fillStyle(0xffffff);
+      houseGfx.fillRect(38, 75, 10, 10);
+      houseGfx.generateTexture('house', 80, 100);
+      houseGfx.destroy();
+
+      // Create leaflet texture (small green circle, radius 5).
+      let leafletGfx = this.add.graphics();
+      leafletGfx.fillStyle(0x00ff00);
+      leafletGfx.fillCircle(5, 5, 5);
+      leafletGfx.generateTexture('leaflet', 10, 10);
+      leafletGfx.destroy();
+
+      // Generate a simple spark texture for fireworks.
+      this.add.graphics()
+        .fillStyle(0xffffff)
+        .fillCircle(4, 4, 4)
+        .generateTexture('spark', 8, 8)
+        .destroy();
+
+      // Preload the "bleep" sound.
+      this.load.audio('bleep', 'https://labs.phaser.io/assets/audio/SoundEffects/key.wav');
     }
+    create() {
+      // Use default black background.
+      this.houseSpacing = 300;
+      this.totalHouses = 10;
+      this.houses = [];
+      // Global votes only update on a successful leaflet delivery.
+      this.totalVotes = { blue: 0, red: 0, yellow: 0, green: 0 };
+      this.playerLives = 3;
+      this.gameOver = false;
+      this.leaflet = null;
+      this.houseSpeed = 2;
 
-    // Update game state on each frame
-    function update() {
-      // Allow the player to move up and down (within canvas bounds)
-      if (keys['ArrowUp']) {
-        player.y -= player.speed;
-        if (player.y < 0) player.y = 0;
-      }
-      if (keys['ArrowDown']) {
-        player.y += player.speed;
-        if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
-      }
-      // Advance the world to simulate the canvasser moving forward
-      worldOffset += 2;
+      // Create player sprite at horizontal centre.
+      this.player = this.physics.add.sprite(400, 500, 'player');
+      this.player.setCollideWorldBounds(true);
 
-      // Update active leaflet position, if any
-      if (activeLeaflet) {
-        activeLeaflet.x += activeLeaflet.speed;
-        // Remove leaflet if it goes off screen
-        if (activeLeaflet.x > canvas.width) {
-          activeLeaflet = null;
-        }
+      // Create houses (top-left positioning).
+      this.houseGroup = this.physics.add.group();
+      for (let i = 0; i < this.totalHouses; i++) {
+        let x = 800 + i * this.houseSpacing;
+        let y = Phaser.Math.Between(250, 450);
+        let house = this.physics.add.sprite(x, y, 'house');
+        house.setOrigin(0, 0);
+        house.setImmovable(true);
+        house.votes = Phaser.Math.Between(1, 4);
+        house.hitLetterbox = false;
+        house.evaluated = false;
+        house.collided = false;
+        // Define full house rectangle.
+        house.fullRect = new Phaser.Geom.Rectangle(x, y, 80, 100);
+        // Door region (safe passage): door at (30,60) relative to house.
+        house.doorRect = new Phaser.Geom.Rectangle(x + 30, y + 60, 20, 40);
+        // Letterbox region (target): at (38,75) relative to house.
+        house.letterbox = new Phaser.Geom.Rectangle(x + 38, y + 75, 10, 10);
+        this.houses.push(house);
+        this.houseGroup.add(house);
       }
 
-      // Check collision between player and houses for peril
-      houses.forEach(house => {
-        // Calculate house screen coordinates
-        let screenX = house.x - worldOffset + 100;
-        if (!house.collidedWithPlayer && 
-            player.x < screenX + house.width &&
-            player.x + player.width > screenX &&
-            player.y < house.y + house.height &&
-            player.y + player.height > house.y) {
-          house.collidedWithPlayer = true;
-          player.lives--;
-          // End game if lives drop to zero
-          if (player.lives <= 0) {
-            gameOver = true;
-            document.getElementById('playAgainContainer').style.display = 'block';
-          }
+      // Set up keyboard input (vertical movement only).
+      this.cursors = this.input.keyboard.createCursorKeys();
+      this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+      // Player-house collision.
+      this.physics.add.overlap(this.player, this.houseGroup, this.handlePlayerHouseCollision, null, this);
+
+      // Set up HUD.
+      this.voteText = this.add.text(10, 10, "", { font: "16px Arial", fill: "#fff" });
+      this.livesText = this.add.text(10, 30, "", { font: "16px Arial", fill: "#fff" });
+      this.updateHUD();
+
+      // Game Over text (hidden until round ends).
+      this.gameOverText = this.add.text(400, 300, "Game Over\nClick to Play Again", { font: "32px Arial", fill: "#fff", align: "center" });
+      this.gameOverText.setOrigin(0.5);
+      this.gameOverText.setVisible(false);
+      this.input.on("pointerdown", () => {
+        if (this.gameOver) {
+          this.scene.restart();
         }
       });
-
-      // Check collisions between leaflet and each house's letterbox
-      houses.forEach(house => {
-        // Calculate letterbox absolute position on canvas
-        const lb = {
-          x: house.x - worldOffset + 100, // adjusting for world offset and fixed margin
-          y: house.y + house.letterbox.y,
-          width: house.letterbox.width,
-          height: house.letterbox.height
-        };
-        if (activeLeaflet && !house.hit) {
-          if (circleRectCollision(activeLeaflet, lb)) {
-            house.hit = true;
-            // Compute vote distribution with a boost for your chosen party
-            house.distribution = computeVotes(house.votes, true);
-            // Add votes for all parties to the total
-            for (let p in house.distribution) {
-              totalVotes[p] += house.distribution[p];
-            }
-            activeLeaflet = null;
-          }
+    }
+    updateHUD() {
+      this.voteText.setText("Votes - Blue: " + this.totalVotes.blue + "  Red: " + this.totalVotes.red + "  Yellow: " + this.totalVotes.yellow + "  Green: " + this.totalVotes.green);
+      this.livesText.setText("Lives: " + this.playerLives);
+    }
+    // On player-house collision, lose a life and respawn.
+    handlePlayerHouseCollision(player, house) {
+      if (!house.collided) {
+        house.collided = true;
+        this.playerLives--;
+        this.updateHUD();
+        if (this.playerLives > 0) {
+          this.player.setPosition(400, 500);
+        } else {
+          this.endGame();
         }
-      });
-
-      // For houses that the canvasser passes without a leaflet hit,
-      // compute a random vote distribution.
-      houses.forEach(house => {
-        let houseScreenX = house.x - worldOffset + 100;
-        if (!house.evaluated && houseScreenX + house.width < 0) {
-          if (!house.hit) {
-            house.distribution = computeVotes(house.votes, false);
-            for (let p in house.distribution) {
-              totalVotes[p] += house.distribution[p];
-            }
-          }
-          house.evaluated = true;
-        }
-      });
-
-      // End the round if all houses have been evaluated or player is out of lives
-      if (houses.every(h => h.evaluated) || player.lives <= 0) {
-        gameOver = true;
-        document.getElementById('playAgainContainer').style.display = 'block';
       }
     }
-
-    // Compute the vote distribution for a house.
-    // If 'boosted' is true, your party gets a 50% chance per vote; otherwise, 25% for each party.
-    function computeVotes(voteCount, boosted) {
+    computeVotes(voteCount, boosted) {
       let distribution = { blue: 0, red: 0, yellow: 0, green: 0 };
       for (let i = 0; i < voteCount; i++) {
         let rnd = Math.random();
         if (boosted) {
           if (rnd < 0.5) {
-            distribution[partyChoice]++;
+            distribution[playerParty]++;
           } else {
-            // Distribute vote randomly among the other parties
-            let others = ['blue', 'red', 'yellow', 'green'].filter(col => col !== partyChoice);
+            let others = ['blue', 'red', 'yellow', 'green'].filter(p => p !== playerParty);
             let idx = Math.floor(Math.random() * others.length);
             distribution[others[idx]]++;
           }
@@ -276,122 +182,174 @@
       }
       return distribution;
     }
-
-    // Basic circle-rectangle collision detection function
-    function circleRectCollision(circle, rect) {
-      let distX = Math.abs(circle.x - rect.x - rect.width / 2);
-      let distY = Math.abs(circle.y - rect.y - rect.height / 2);
-
-      if (distX > (rect.width / 2 + circle.radius)) return false;
-      if (distY > (rect.height / 2 + circle.radius)) return false;
-
-      if (distX <= (rect.width / 2)) return true;
-      if (distY <= (rect.height / 2)) return true;
-
-      let dx = distX - rect.width / 2;
-      let dy = distY - rect.height / 2;
-      return (dx * dx + dy * dy <= (circle.radius * circle.radius));
+    // Brief explosion effect for a mis-delivered leaflet.
+    explodeLeaflet(leaflet) {
+      let explosion = this.add.circle(leaflet.x, leaflet.y, 10, 0xff0000);
+      this.tweens.add({
+        targets: explosion,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => { explosion.destroy(); }
+      });
     }
-
-    // Draw the background with a sky gradient and rolling hills
-    function drawBackground() {
-      // Draw sky gradient
-      let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, '#87CEEB'); // sky blue
-      gradient.addColorStop(1, '#ffffff'); // near white at the horizon
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw rolling hills
-      ctx.fillStyle = '#228B22'; // forest green
-      ctx.beginPath();
-      ctx.moveTo(0, canvas.height - 120);
-      // First hill curve
-      ctx.quadraticCurveTo(200, canvas.height - 300, 400, canvas.height - 120);
-      // Second hill curve
-      ctx.quadraticCurveTo(600, canvas.height - 50, 800, canvas.height - 120);
-      ctx.lineTo(canvas.width, canvas.height);
-      ctx.lineTo(0, canvas.height);
-      ctx.closePath();
-      ctx.fill();
+    // Display bar chart results at the end of the round.
+    showResults() {
+      let scores = [
+        { party: 'blue', score: this.totalVotes.blue },
+        { party: 'red', score: this.totalVotes.red },
+        { party: 'yellow', score: this.totalVotes.yellow },
+        { party: 'green', score: this.totalVotes.green }
+      ];
+      // Sort descending so highest score is first.
+      scores.sort(function(a, b) { return b.score - a.score; });
+      let maxScore = scores[0].score || 1;
+      const partyColors = { blue: 0x0000ff, red: 0xff0000, yellow: 0xffff00, green: 0x00ff00 };
+      let chartX = 50;
+      let chartY = 550;
+      let barWidth = 100;
+      let maxBarHeight = 200;
+      let gap = 20;
+      let graphics = this.add.graphics();
+      scores.forEach(function(entry, index) {
+        let barHeight = (entry.score / maxScore) * maxBarHeight;
+        let x = chartX + index * (barWidth + gap);
+        let y = chartY - barHeight;
+        graphics.fillStyle(partyColors[entry.party], 1);
+        graphics.fillRect(x, y, barWidth, barHeight);
+        this.add.text(x + barWidth / 2, chartY + 5, entry.party.toUpperCase() + "\n" + entry.score,
+          { font: "20px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
+      }, this);
+      // If the winning party matches the player's chosen party, spawn fireworks.
+      if (scores[0].party === playerParty) {
+        this.spawnFireworks();
+      }
     }
-
-    // Draw the game objects on the canvas
-    function draw() {
-      // Clear the canvas and draw background with hills
-      drawBackground();
-
-      // Draw each house
-      houses.forEach(house => {
-        let screenX = house.x - worldOffset + 100;
-        if (screenX + house.width > 0 && screenX < canvas.width) {
-          // Draw house body
-          ctx.fillStyle = '#888';
-          ctx.fillRect(screenX, house.y, house.width, house.height);
-          // Draw a simple roof
-          ctx.fillStyle = '#444';
-          ctx.beginPath();
-          ctx.moveTo(screenX, house.y);
-          ctx.lineTo(screenX + house.width / 2, house.y - 30);
-          ctx.lineTo(screenX + house.width, house.y);
-          ctx.closePath();
-          ctx.fill();
-          // Draw the letterbox (target)
-          ctx.fillStyle = '#fff';
-          ctx.fillRect(screenX + house.letterbox.x, house.y + house.letterbox.y, house.letterbox.width, house.letterbox.height);
-
-          // If the house has been evaluated, display its vote distribution
-          if (house.distribution) {
-            ctx.fillStyle = '#fff';
-            ctx.font = "10px Arial";
-            let text = `B:${house.distribution.blue} R:${house.distribution.red} Y:${house.distribution.yellow} G:${house.distribution.green}`;
-            ctx.fillText(text, screenX, house.y - 10);
-          }
+    // Spawn fireworks using emitParticleAt.
+    spawnFireworks() {
+      this.time.addEvent({
+        delay: 500,
+        repeat: 5,
+        callback: () => {
+          let x = Phaser.Math.Between(100, 700);
+          let y = Phaser.Math.Between(50, 300);
+          let particles = this.add.particles('spark');
+          particles.emitParticleAt(x, y, 30);
+          this.time.delayedCall(1000, function() {
+            particles.destroy();
+          }, [], this);
         }
       });
-
-      // Draw the player (canvasser) as a simple rectangle
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(player.x, player.y, player.width, player.height);
-
-      // Draw the active leaflet, if any
-      if (activeLeaflet) {
-        ctx.fillStyle = '#0f0';
-        ctx.beginPath();
-        ctx.arc(activeLeaflet.x, activeLeaflet.y, activeLeaflet.radius, 0, Math.PI * 2);
-        ctx.fill();
+    }
+    update(time, delta) {
+      if (this.gameOver) return;
+      // Lock player x-position.
+      this.player.x = 400;
+      // Vertical movement.
+      if (this.cursors.up.isDown) {
+        this.player.setVelocityY(-150);
+      } else if (this.cursors.down.isDown) {
+        this.player.setVelocityY(150);
+      } else {
+        this.player.setVelocityY(0);
       }
-
-      // Display the total votes for each party
-      ctx.fillStyle = '#fff';
-      ctx.font = "16px Arial";
-      ctx.fillText(`Votes: Blue: ${totalVotes.blue}  Red: ${totalVotes.red}  Yellow: ${totalVotes.yellow}  Green: ${totalVotes.green}`, 10, 20);
-      // Display remaining lives
-      ctx.fillText(`Lives: ${player.lives}`, 10, 40);
-
-      // If the game is over, overlay a final message
-      if (gameOver) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff';
-        ctx.font = "30px Arial";
-        ctx.fillText("Round Over", canvas.width / 2 - 80, canvas.height / 2 - 20);
-        ctx.font = "20px Arial";
-        let voteSummary = `Blue: ${totalVotes.blue}  Red: ${totalVotes.red}  Yellow: ${totalVotes.yellow}  Green: ${totalVotes.green}`;
-        ctx.fillText(voteSummary, canvas.width / 2 - 180, canvas.height / 2 + 20);
+      // Launch leaflet on space press (one at a time).
+      if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.leaflet) {
+        this.leaflet = this.physics.add.sprite(this.player.x, this.player.y - 15, 'leaflet');
+        this.leaflet.setVelocityY(-300);
+      }
+      if (this.leaflet) {
+        if (this.leaflet.y < 0) {
+          this.leaflet.destroy();
+          this.leaflet = null;
+        } else {
+          let leafletCenter = { x: this.leaflet.x, y: this.leaflet.y };
+          for (let i = 0; i < this.houses.length; i++) {
+            let house = this.houses[i];
+            house.fullRect = new Phaser.Geom.Rectangle(house.x, house.y, 80, 100);
+            house.doorRect = new Phaser.Geom.Rectangle(house.x + 30, house.y + 60, 20, 40);
+            house.letterbox = new Phaser.Geom.Rectangle(house.x + 38, house.y + 75, 10, 10);
+            if (Phaser.Geom.Rectangle.ContainsPoint(house.fullRect, leafletCenter)) {
+              if (Phaser.Geom.Rectangle.ContainsPoint(house.letterbox, leafletCenter)) {
+                if (!house.hitLetterbox) {
+                  house.hitLetterbox = true;
+                  let distribution = this.computeVotes(house.votes, true);
+                  for (let p in distribution) {
+                    this.totalVotes[p] += distribution[p];
+                  }
+                  this.updateHUD();
+                  // Tint the house based on the winning vote.
+                  let maxVotes = Math.max(distribution.blue, distribution.red, distribution.yellow, distribution.green);
+                  let winners = [];
+                  if (distribution.blue === maxVotes) winners.push("blue");
+                  if (distribution.red === maxVotes) winners.push("red");
+                  if (distribution.yellow === maxVotes) winners.push("yellow");
+                  if (distribution.green === maxVotes) winners.push("green");
+                  if (winners.length === 1) {
+                    let tint;
+                    switch(winners[0]) {
+                      case "blue": tint = 0x0000ff; break;
+                      case "red": tint = 0xff0000; break;
+                      case "yellow": tint = 0xffff00; break;
+                      case "green": tint = 0x00ff00; break;
+                    }
+                    house.setTint(tint);
+                  } else {
+                    house.clearTint();
+                  }
+                  this.sound.play("bleep");
+                }
+                this.leaflet.destroy();
+                this.leaflet = null;
+                break;
+              }
+              if (!Phaser.Geom.Rectangle.ContainsPoint(house.doorRect, leafletCenter)) {
+                this.explodeLeaflet(this.leaflet);
+                this.leaflet.destroy();
+                this.leaflet = null;
+                break;
+              }
+            }
+          }
+        }
+      }
+      this.houses.forEach(function(house) {
+        if (!house.evaluated) {
+          house.x -= this.houseSpeed;
+          house.fullRect = new Phaser.Geom.Rectangle(house.x, house.y, 80, 100);
+          house.doorRect.setTo(house.x + 30, house.y + 60, 20, 40);
+          house.letterbox.setTo(house.x + 38, house.y + 75, 10, 10);
+          if (house.x + 80 < 0) {
+            house.evaluated = true;
+            house.destroy();
+          }
+        }
+      }, this);
+      if (this.houses.every(function(h) { return h.evaluated; })) {
+        this.endGame();
       }
     }
-
-    // Main game loop
-    function gameLoop() {
-      if (!gameOver) {
-        update();
+    endGame() {
+      this.gameOver = true;
+      this.player.setVelocity(0);
+      if (this.leaflet) {
+        this.leaflet.destroy();
+        this.leaflet = null;
       }
-      draw();
-      if (!gameOver) {
-        requestAnimationFrame(gameLoop);
-      }
+      this.gameOverText.setVisible(false);
+      this.showResults();
     }
-  </script>
+  }
+
+  const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    backgroundColor: "#000000",
+    physics: { default: "arcade", arcade: { debug: false } },
+    scene: [MenuScene, GameScene]
+  };
+
+  const game = new Phaser.Game(config);
+</script>
 </body>
 </html>
