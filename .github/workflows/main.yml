@@ -13,4 +13,4 @@ jobs:
       with:
         server: ftp.bluetorch.co.uk
         username: leafletboy@bluetorch.co.uk
-        password: ${{ secrets.ftp_password }}
+        password: ${{ secrets.ftp_account_password }}
