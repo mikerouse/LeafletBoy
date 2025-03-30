@@ -5,7 +5,7 @@
   <title>Political Canvasser - Portrait Mobile Version</title>
   <style>
     body { margin: 0; }
-    canvas { display: block; margin: 0 auto; background-color: #333333; }
+    /* The canvas background will be set via Phaser configuration */
   </style>
   <!-- Import Phaser 3 from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
@@ -33,14 +33,13 @@
       const centerY = this.cameras.main.height / 2;
       this.add.text(centerX, centerY - 140, "Choose Your Party", { font: "32px Arial", fill: "#fff" }).setOrigin(0.5);
       
-      // Updated rules text.
       const rulesText = "Move with arrows or WASD (or tap the on-screen buttons) and press spacebar (or tap the fire button) to deliver a leaflet.\n" +
-                        "Each house displays a door number (voter count) above the door.\n" +
-                        "Houses fall from the top – position yourself underneath a house to deliver a leaflet into its letterbox, then move out of the way.\n" +
+                        "Each house displays a door number (voter count) above its door.\n" +
+                        "Houses fall from the top – position yourself underneath a house to deliver a leaflet into its letterbox, then move away!\n" +
                         "Don't trespass onto a house or you lose a life.";
       this.add.text(centerX, centerY - 80, rulesText, { font: "18px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
       
-      // Party selection: Display each party as a colored block.
+      // Party selection: display each party as a colored block.
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
       parties.forEach((party, index) => {
         let block = this.add.rectangle(centerX, centerY + 20 + index * 60, 100, 40, partyColors[party]);
@@ -54,7 +53,7 @@
     }
   }
 
-  // Game Scene: Main gameplay and results display.
+  // Game Scene: Main gameplay and results.
   class GameScene extends Phaser.Scene {
     constructor() {
       super({ key: "GameScene" });
@@ -62,14 +61,11 @@
     preload() {
       // Create a person-like player texture.
       let playerGfx = this.add.graphics();
-      // Head.
       playerGfx.fillStyle(0xffcc99, 1);
       playerGfx.fillCircle(15, 10, 10);
-      // Body: use player's party color if set; otherwise white.
       let bodyColor = playerParty ? partyColors[playerParty] : 0xffffff;
       playerGfx.fillStyle(bodyColor, 1);
       playerGfx.fillRect(5, 20, 20, 20);
-      // Legs.
       playerGfx.fillStyle(0x000000, 1);
       playerGfx.fillRect(8, 40, 4, 10);
       playerGfx.fillRect(18, 40, 4, 10);
@@ -84,25 +80,22 @@
       houseGfx.fillTriangle(0, 20, 40, -10, 80, 20);
       houseGfx.fillStyle(0x654321, 1);
       houseGfx.fillRect(30, 60, 20, 40);
-      // Draw letterbox as a horizontal rectangle.
-      // Door center is at x=40 so letterbox starts at x=40-6=34, width=12, height=4.
       houseGfx.fillStyle(0xffffff, 1);
       houseGfx.fillRect(34, 75, 12, 4);
       houseGfx.generateTexture("house", 80, 100);
       houseGfx.destroy();
 
-      // Create leaflet texture as a portrait rectangle (4x10).
+      // Create leaflet texture as a portrait rectangle (4×10).
       let leafletGfx = this.add.graphics();
       leafletGfx.fillStyle(0x00ff00, 1);
       leafletGfx.fillRect(0, 0, 4, 10);
       leafletGfx.generateTexture("leaflet", 4, 10);
       leafletGfx.destroy();
 
-      // Preload the "bleep" sound.
       this.load.audio("bleep", "https://labs.phaser.io/assets/audio/SoundEffects/key.wav");
     }
     create() {
-      // Configure for portrait orientation (600x900).
+      // Portrait dimensions: 600x900.
       this.houseSpacing = 300;
       this.totalHouses = 10;
       this.houses = [];
@@ -113,16 +106,14 @@
       this.leaflet = null;
       this.houseSpeed = 2;
 
-      // Player starts near the bottom center.
+      // Player starts near bottom center.
       this.player = this.physics.add.sprite(300, 800, "player");
       this.player.setCollideWorldBounds(true);
 
-      // Create houses that fall downwards.
+      // Create houses that fall downward.
       this.houseGroup = this.physics.add.group();
       for (let i = 0; i < this.totalHouses; i++) {
-        // Random horizontal position between 0 and 520 (600 - 80).
         let x = Phaser.Math.Between(0, 520);
-        // Houses spawn above the screen.
         let y = -Phaser.Math.Between(50, 150) - i * this.houseSpacing;
         let house = this.physics.add.sprite(x, y, "house");
         house.setOrigin(0, 0);
@@ -132,18 +123,14 @@
         house.evaluated = false;
         house.collided = false;
         house.fullRect = new Phaser.Geom.Rectangle(x, y, 80, 100);
-        // Door region remains at (30,60) relative to house texture.
         house.doorRect = new Phaser.Geom.Rectangle(x + 30, y + 60, 20, 40);
-        // Letterbox region (for collision) is defined to match drawn letterbox.
-        // To improve detection, we use an intersection test.
         house.letterbox = new Phaser.Geom.Rectangle(x + 34, y + 75, 12, 4);
-        // Create door number text (voter count) above the door.
         house.doorNumberText = this.add.text(x + 40, y + 50, house.votes.toString(), { font: "16px Arial", fill: "#fff" }).setOrigin(0.5);
         this.houses.push(house);
         this.houseGroup.add(house);
       }
 
-      // Create a permanent HUD for votes.
+      // Permanent HUD for votes.
       this.hudBlocks = {};
       const hudStartX = 20, hudStartY = 20, blockSize = 20, blockGap = 10, partyGap = 120;
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
@@ -155,42 +142,34 @@
       this.livesText = this.add.text(20, hudStartY + parties.length * partyGap, "Lives: " + this.playerLives, { font: "16px Arial", fill: "#fff" });
 
       // On-screen mobile buttons.
-      // D-pad on bottom left.
       this.leftBtn = this.add.rectangle(40, 840, 50, 50, 0xffffff, 0.5).setInteractive();
       this.rightBtn = this.add.rectangle(120, 840, 50, 50, 0xffffff, 0.5).setInteractive();
       this.upBtn = this.add.rectangle(80, 800, 50, 50, 0xffffff, 0.5).setInteractive();
       this.downBtn = this.add.rectangle(80, 880, 50, 50, 0xffffff, 0.5).setInteractive();
-      // Fire button on bottom right.
       this.fireBtn = this.add.rectangle(520, 840, 60, 60, 0xff0000, 0.5).setInteractive();
 
-      // Movement flags.
       this.moveLeft = false;
       this.moveRight = false;
       this.moveUp = false;
       this.moveDown = false;
 
-      // Set up on-screen button events.
       this.leftBtn.on("pointerdown", () => { this.moveLeft = true; });
       this.leftBtn.on("pointerup", () => { this.moveLeft = false; });
       this.leftBtn.on("pointerout", () => { this.moveLeft = false; });
-      
       this.rightBtn.on("pointerdown", () => { this.moveRight = true; });
       this.rightBtn.on("pointerup", () => { this.moveRight = false; });
       this.rightBtn.on("pointerout", () => { this.moveRight = false; });
-      
       this.upBtn.on("pointerdown", () => { this.moveUp = true; });
       this.upBtn.on("pointerup", () => { this.moveUp = false; });
       this.upBtn.on("pointerout", () => { this.moveUp = false; });
-      
       this.downBtn.on("pointerdown", () => { this.moveDown = true; });
       this.downBtn.on("pointerup", () => { this.moveDown = false; });
       this.downBtn.on("pointerout", () => { this.moveDown = false; });
-      
       this.fireBtn.on("pointerdown", () => {
         if (!this.leaflet) { this.fireLeaflet(); }
       });
 
-      // Keyboard input (arrows and WASD).
+      // Keyboard input.
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys({ 
         up: Phaser.Input.Keyboard.KeyCodes.W, 
@@ -200,10 +179,8 @@
       });
       this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-      // Player-house collision.
       this.physics.add.overlap(this.player, this.houseGroup, this.handlePlayerHouseCollision, null, this);
 
-      // Game Over text.
       this.gameOverText = this.add.text(300, 450, "Game Over\nTap to Play Again", { font: "32px Arial", fill: "#fff", align: "center" });
       this.gameOverText.setOrigin(0.5);
       this.gameOverText.setVisible(false);
@@ -273,7 +250,6 @@
     }
     update(time, delta) {
       if (this.gameOver) return;
-      // Combine keyboard and on-screen input for horizontal movement.
       let velocityX = 0, velocityY = 0;
       if (this.cursors.left.isDown || this.wasd.left.isDown || this.moveLeft) { velocityX = -150; }
       else if (this.cursors.right.isDown || this.wasd.right.isDown || this.moveRight) { velocityX = 150; }
@@ -281,9 +257,151 @@
       else if (this.cursors.down.isDown || this.wasd.down.isDown || this.moveDown) { velocityY = 150; }
       this.player.setVelocity(velocityX, velocityY);
 
-      // Launch leaflet on keyboard.
       if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.leaflet) { this.fireLeaflet(); }
 
-      // Process leaflet.
       if (this.leaflet) {
-        if (this
+        if (this.leaflet.y < 0) {
+          this.leaflet.destroy();
+          this.leaflet = null;
+        } else {
+          let leafletCenter = { x: this.leaflet.x, y: this.leaflet.y };
+          for (let i = 0; i < this.houses.length; i++) {
+            let house = this.houses[i];
+            house.fullRect = new Phaser.Geom.Rectangle(house.x, house.y, 80, 100);
+            house.doorRect = new Phaser.Geom.Rectangle(house.x + 30, house.y + 60, 20, 40);
+            house.letterbox = new Phaser.Geom.Rectangle(house.x + 34, house.y + 75, 12, 4);
+            // Use intersection test: if the leaflet's bounding box overlaps the letterbox.
+            if (Phaser.Geom.Rectangle.Overlaps(house.fullRect, this.leaflet.getBounds())) {
+              if (Phaser.Geom.Rectangle.Overlaps(house.letterbox, this.leaflet.getBounds())) {
+                if (!house.hitLetterbox) {
+                  house.hitLetterbox = true;
+                  let distribution = this.computeVotes(house.votes, true);
+                  for (let p in distribution) {
+                    this.totalVotes[p] += distribution[p];
+                  }
+                  this.updateHUD();
+                  let maxVotes = Math.max(distribution.blue, distribution.red, distribution.yellow, distribution.green, distribution.turquoise);
+                  let winners = [];
+                  if (distribution.blue === maxVotes) winners.push("blue");
+                  if (distribution.red === maxVotes) winners.push("red");
+                  if (distribution.yellow === maxVotes) winners.push("yellow");
+                  if (distribution.green === maxVotes) winners.push("green");
+                  if (distribution.turquoise === maxVotes) winners.push("turquoise");
+                  if (winners.length === 1) {
+                    let tint;
+                    switch(winners[0]) {
+                      case "blue": tint = partyColors.blue; break;
+                      case "red": tint = partyColors.red; break;
+                      case "yellow": tint = partyColors.yellow; break;
+                      case "green": tint = partyColors.green; break;
+                      case "turquoise": tint = partyColors.turquoise; break;
+                    }
+                    house.setTint(tint);
+                  } else {
+                    house.clearTint();
+                  }
+                  this.sound.play("bleep");
+                }
+                this.leaflet.destroy();
+                this.leaflet = null;
+                break;
+              }
+              if (!Phaser.Geom.Rectangle.Overlaps(house.doorRect, this.leaflet.getBounds())) {
+                this.explodeLeaflet(this.leaflet);
+                this.leaflet.destroy();
+                this.leaflet = null;
+                break;
+              }
+            }
+          }
+        }
+      }
+      this.houses.forEach(function(house) {
+        if (!house.evaluated) {
+          house.y += this.houseSpeed;
+          house.fullRect = new Phaser.Geom.Rectangle(house.x, house.y, 80, 100);
+          house.doorRect.setTo(house.x + 30, house.y + 60, 20, 40);
+          house.letterbox.setTo(house.x + 34, house.y + 75, 12, 4);
+          if (house.doorNumberText) { house.doorNumberText.setPosition(house.x + 40, house.y + 50); }
+          if (house.y > this.sys.game.config.height) {
+            if (house.doorNumberText) { house.doorNumberText.destroy(); }
+            house.evaluated = true;
+            house.destroy();
+          }
+        }
+      }, this);
+      if (this.houses.every(function(h) { return h.evaluated; })) {
+        this.endGame();
+      }
+    }
+    endGame() {
+      this.gameOver = true;
+      this.player.setVelocity(0);
+      if (this.leaflet) {
+        this.leaflet.destroy();
+        this.leaflet = null;
+      }
+      this.gameOverText.setVisible(false);
+      this.showResults();
+    }
+    showResults() {
+      let scores = [
+        { party: "blue", score: this.totalVotes.blue },
+        { party: "red", score: this.totalVotes.red },
+        { party: "yellow", score: this.totalVotes.yellow },
+        { party: "green", score: this.totalVotes.green },
+        { party: "turquoise", score: this.totalVotes.turquoise }
+      ];
+      scores.sort(function(a, b) { return b.score - a.score; });
+      let maxScore = scores[0].score || 1;
+      const scoreColors = {
+        blue: partyColors.blue,
+        red: partyColors.red,
+        yellow: partyColors.yellow,
+        green: partyColors.green,
+        turquoise: partyColors.turquoise
+      };
+      let chartX = 50;
+      let chartY = 550;
+      let barWidth = 100;
+      let maxBarHeight = 200;
+      let gap = 20;
+      let graphics = this.add.graphics();
+      scores.forEach(function(entry, index) {
+        let barHeight = (entry.score / maxScore) * maxBarHeight;
+        let x = chartX + index * (barWidth + gap);
+        let y = chartY - barHeight;
+        graphics.fillStyle(scoreColors[entry.party], 1);
+        graphics.fillRect(x, y, barWidth, barHeight);
+        this.add.rectangle(x + barWidth / 2, chartY + 30, 20, 20, scoreColors[entry.party]).setOrigin(0.5);
+        this.add.text(x + barWidth / 2, chartY + 55, entry.score.toString(), { font: "20px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
+      }, this);
+      if (!this.playerLost) {
+        if (scores[0].score > (scores[1] ? scores[1].score : 0)) {
+          if (scores[0].party === playerParty) {
+            this.add.text(240, 100, "WINNER", { font: "80px Arial", fill: "#fff" }).setOrigin(0.5);
+          }
+        } else {
+          this.add.text(240, 100, "DRAW LOTS", { font: "80px Arial", fill: "#fff" }).setOrigin(0.5);
+        }
+      }
+    }
+  }
+
+  const config = {
+    type: Phaser.AUTO,
+    width: 480,
+    height: 900,
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    backgroundColor: "#333333",
+    physics: { default: "arcade", arcade: { debug: false } },
+    scene: [MenuScene, GameScene]
+  };
+
+  const game = new Phaser.Game(config);
+</script>
+</body>
+</html>
