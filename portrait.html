@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Political Canvasser - Portrait Mobile Version</title>
+  <title>Political Canvasser - Portrait Mobile (Swipe to Move)</title>
   <style>
     body { margin: 0; }
-    /* The canvas background is set in Phaser config */
+    /* The canvas background will be set via Phaser config */
   </style>
   <!-- Import Phaser 3 from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
@@ -33,17 +33,16 @@
       const centerY = this.cameras.main.height / 2;
       this.add.text(centerX, centerY - 140, "Choose Your Party", { font: "32px Arial", fill: "#fff" }).setOrigin(0.5);
       
-      const rulesText = "Move with arrows or WASD (or tap the on-screen buttons) and press spacebar (or tap anywhere\n" +
-                        "that isn't a directional button) to deliver a leaflet.\n" +
+      const rulesText = "Move with arrows or WASD and swipe (drag) your avatar to move.\n" +
+                        "Tap anywhere (that isn’t dragging your character) to deliver a leaflet.\n" +
                         "Each house shows a door number (voter count) above its door.\n" +
                         "Houses fall from the top – get underneath a falling house to deliver a leaflet into its letterbox,\n" +
-                        "then move away before you get hit.\n" +
-                        "Don't trespass onto a house or you'll lose a life.";
+                        "then move away before you get hit. Don't trespass onto a house or you'll lose a life.";
       this.add.text(centerX, centerY - 80, rulesText, { font: "18px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
-      
-      // Party selection: Display each party as a colored block.
+
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
       parties.forEach((party, index) => {
+        // Show a colored block for each party.
         let block = this.add.rectangle(centerX, centerY + 20 + index * 60, 100, 40, partyColors[party]);
         block.setStrokeStyle(2, 0xffffff);
         block.setInteractive();
@@ -63,11 +62,14 @@
     preload() {
       // Create a person-like player texture.
       let playerGfx = this.add.graphics();
+      // Head.
       playerGfx.fillStyle(0xffcc99, 1);
       playerGfx.fillCircle(15, 10, 10);
+      // Body: use player's party color if set; otherwise white.
       let bodyColor = playerParty ? partyColors[playerParty] : 0xffffff;
       playerGfx.fillStyle(bodyColor, 1);
       playerGfx.fillRect(5, 20, 20, 20);
+      // Legs.
       playerGfx.fillStyle(0x000000, 1);
       playerGfx.fillRect(8, 40, 4, 10);
       playerGfx.fillRect(18, 40, 4, 10);
@@ -87,7 +89,7 @@
       houseGfx.generateTexture("house", 80, 100);
       houseGfx.destroy();
 
-      // Create leaflet texture as a portrait rectangle (4x10).
+      // Create leaflet texture as a portrait rectangle.
       let leafletGfx = this.add.graphics();
       leafletGfx.fillStyle(0x00ff00, 1);
       leafletGfx.fillRect(0, 0, 4, 10);
@@ -108,14 +110,22 @@
       this.leaflet = null;
       this.houseSpeed = 2;
 
-      // Player starts near the bottom center.
+      // Create player sprite near the bottom center.
       this.player = this.physics.add.sprite(300, 800, "player");
       this.player.setCollideWorldBounds(true);
+      // Enable drag on the player for swipe movement.
+      this.player.setInteractive();
+      this.input.setDraggable(this.player);
+      this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
+        // Constrain within screen.
+        gameObject.x = Phaser.Math.Clamp(dragX, 0, this.sys.game.config.width);
+        gameObject.y = Phaser.Math.Clamp(dragY, 0, this.sys.game.config.height);
+      });
 
-      // Create houses that fall downward.
+      // Create houses that fall from the top.
       this.houseGroup = this.physics.add.group();
       for (let i = 0; i < this.totalHouses; i++) {
-        let x = Phaser.Math.Between(0, 520); // 600-80=520 so houses fit horizontally.
+        let x = Phaser.Math.Between(0, 520);
         let y = -Phaser.Math.Between(50, 150) - i * this.houseSpacing;
         let house = this.physics.add.sprite(x, y, "house");
         house.setOrigin(0, 0);
@@ -132,7 +142,7 @@
         this.houseGroup.add(house);
       }
 
-      // Create a permanent HUD for votes.
+      // Permanent HUD for votes.
       this.hudBlocks = {};
       const hudStartX = 20, hudStartY = 20, blockSize = 20, blockGap = 10, partyGap = 120;
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
@@ -143,44 +153,15 @@
       });
       this.livesText = this.add.text(20, hudStartY + parties.length * partyGap, "Lives: " + this.playerLives, { font: "16px Arial", fill: "#fff" });
 
-      // On-screen mobile directional buttons.
-      this.leftBtn = this.add.rectangle(40, 840, 50, 50, 0xffffff, 0.5).setInteractive();
-      this.rightBtn = this.add.rectangle(120, 840, 50, 50, 0xffffff, 0.5).setInteractive();
-      this.upBtn = this.add.rectangle(80, 800, 50, 50, 0xffffff, 0.5).setInteractive();
-      this.downBtn = this.add.rectangle(80, 880, 50, 50, 0xffffff, 0.5).setInteractive();
-      // Call stopPropagation so that these buttons don’t fire the global pointerdown event.
-      [this.leftBtn, this.rightBtn, this.upBtn, this.downBtn].forEach(btn => {
-        btn.on("pointerdown", function (pointer, currentlyOver) {
-          pointer.event.stopPropagation();
-          // Set movement flag.
-          if (btn === this.leftBtn) { this.moveLeft = true; }
-          else if (btn === this.rightBtn) { this.moveRight = true; }
-          else if (btn === this.upBtn) { this.moveUp = true; }
-          else if (btn === this.downBtn) { this.moveDown = true; }
-        }, this);
-        btn.on("pointerup", function () { 
-          if (btn === this.leftBtn) { this.moveLeft = false; }
-          else if (btn === this.rightBtn) { this.moveRight = false; }
-          else if (btn === this.upBtn) { this.moveUp = false; }
-          else if (btn === this.downBtn) { this.moveDown = false; }
-        }, this);
-        btn.on("pointerout", function () {
-          if (btn === this.leftBtn) { this.moveLeft = false; }
-          else if (btn === this.rightBtn) { this.moveRight = false; }
-          else if (btn === this.upBtn) { this.moveUp = false; }
-          else if (btn === this.downBtn) { this.moveDown = false; }
-        }, this);
+      // Global tap-to-fire: if pointerup occurs and it wasn't a drag on the player, fire a leaflet.
+      this.input.on("pointerup", (pointer) => {
+        // If the pointer wasn’t dragged (i.e. tap) then fire leaflet.
+        if (!pointer.wasDragged && !this.leaflet) {
+          this.fireLeaflet();
+        }
       });
 
-      // Global pointerdown event to fire a leaflet if not tapping on a directional button.
-      this.input.on("pointerdown", (pointer, currentlyOver) => {
-        // If the pointer event did not hit any interactive object (or didn't hit one of our D-pad buttons), fire leaflet.
-        if (!currentlyOver || currentlyOver.length === 0) {
-          if (!this.leaflet) { this.fireLeaflet(); }
-        }
-      }, this);
-
-      // Keyboard input (arrows and WASD).
+      // Keyboard input remains available.
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys({ 
         up: Phaser.Input.Keyboard.KeyCodes.W, 
@@ -261,13 +242,19 @@
     }
     update(time, delta) {
       if (this.gameOver) return;
+
+      // Allow keyboard movement.
       let velocityX = 0, velocityY = 0;
-      if (this.cursors.left.isDown || this.wasd.left.isDown || this.moveLeft) { velocityX = -150; }
-      else if (this.cursors.right.isDown || this.wasd.right.isDown || this.moveRight) { velocityX = 150; }
-      if (this.cursors.up.isDown || this.wasd.up.isDown || this.moveUp) { velocityY = -150; }
-      else if (this.cursors.down.isDown || this.wasd.down.isDown || this.moveDown) { velocityY = 150; }
+      if (this.cursors.left.isDown || this.wasd.left.isDown) { velocityX = -150; }
+      else if (this.cursors.right.isDown || this.wasd.right.isDown) { velocityX = 150; }
+      if (this.cursors.up.isDown || this.wasd.up.isDown) { velocityY = -150; }
+      else if (this.cursors.down.isDown || this.wasd.down.isDown) { velocityY = 150; }
+      // If not dragging the player, set velocity.
       this.player.setVelocity(velocityX, velocityY);
 
+      // Also allow the player to be dragged (swipe) – already handled by drag events.
+
+      // Launch leaflet with space key.
       if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.leaflet) { this.fireLeaflet(); }
 
       if (this.leaflet) {
@@ -281,6 +268,7 @@
             house.fullRect = new Phaser.Geom.Rectangle(house.x, house.y, 80, 100);
             house.doorRect = new Phaser.Geom.Rectangle(house.x + 30, house.y + 60, 20, 40);
             house.letterbox = new Phaser.Geom.Rectangle(house.x + 34, house.y + 75, 12, 4);
+            // Use Overlaps to detect collision between leaflet and letterbox.
             if (Phaser.Geom.Rectangle.Overlaps(house.fullRect, this.leaflet.getBounds())) {
               if (Phaser.Geom.Rectangle.Overlaps(house.letterbox, this.leaflet.getBounds())) {
                 if (!house.hitLetterbox) {
@@ -322,6 +310,7 @@
           }
         }
       }
+
       this.houses.forEach(function(house) {
         if (!house.evaluated) {
           house.y += this.houseSpeed;
