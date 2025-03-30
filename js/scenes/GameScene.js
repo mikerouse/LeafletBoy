@@ -345,20 +345,3 @@ export default class GameScene extends Phaser.Scene {
       });
     }
   }
-  
-  const config = {
-    type: Phaser.AUTO,
-    width: 480,
-    height: 900,
-    scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH
-    },
-    backgroundColor: "#333333",
-    physics: { default: "arcade", arcade: { debug: false } },
-    scene: [MenuScene, GameScene],
-    parent: "game-container"
-  };
-  
-  const game = new Phaser.Game(config);
-  
