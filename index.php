@@ -6,6 +6,7 @@
   <link rel="stylesheet" type="text/css" href="css/style.css">
 </head>
 <body>
+  <!-- The game will render inside this container -->
   <div id="game-container"></div>
   
   <!-- Load Phaser from CDN -->
