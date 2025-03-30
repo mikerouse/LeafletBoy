@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Political Canvasser</title>
+  <style>
+    /* Retro style CSS */
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+    #menu, #playAgainContainer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    #menu button, #playAgainButton {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 16px;
+      margin: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+      border: none;
+    }
+    #playAgainContainer {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Party selection menu -->
+  <div id="menu">
+    <h1>Choose Your Party</h1>
+    <button data-party="blue" style="background: blue; color: white;">Blue</button>
+    <button data-party="red" style="background: red; color: white;">Red</button>
+    <button data-party="yellow" style="background: yellow; color: black;">Yellow</button>
+    <button data-party="green" style="background: green; color: white;">Green</button>
+  </div>
+  <!-- Play Again button container -->
+  <div id="playAgainContainer">
+    <button id="playAgainButton">Play Again</button>
+  </div>
+  <!-- Main game canvas -->
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  
+  <script>
+    // Get canvas and context
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Game variables
+    let partyChoice = null;
+    let totalVotes = { blue: 0, red: 0, yellow: 0, green: 0 };
+    let gameOver = false;
+    let gameStarted = false;
+    let worldOffset = 0;
+    const houseSpacing = 300; // spacing between houses in world coordinates
+    const totalHouses = 10;
+    let houses = [];
+    let activeLeaflet = null;
+
+    // Player object (canvasser)
+    const player = {
+      x: 100,
+      y: canvas.height - 100,
+      width: 30,
+      height: 30,
+      speed: 5,
+      lives: 3
+    };
+
+    // Keyboard state
+    const keys = {};
+
+    // Listen for keyboard events
+    document.addEventListener('keydown', function(e) {
+      keys[e.key] = true;
+      // Space bar to throw a leaflet
+      if (e.key === ' ' && !activeLeaflet && gameStarted && !gameOver) {
+        throwLeaflet();
+      }
+    });
+    document.addEventListener('keyup', function(e) {
+      keys[e.key] = false;
+    });
+
+    // Party selection from menu
+    document.querySelectorAll('#menu button').forEach(button => {
+      button.addEventListener('click', () => {
+        partyChoice = button.getAttribute('data-party');
+        document.getElementById('menu').style.display = 'none';
+        gameStarted = true;
+        initGame();
+      });
+    });
+
+    // Play Again button event
+    document.getElementById('playAgainButton').addEventListener('click', () => {
+      document.getElementById('playAgainContainer').style.display = 'none';
+      initGame();
+    });
+
+    // Initialise houses along the street with random vertical positions
+    function initHouses() {
+      houses = [];
+      for (let i = 0; i < totalHouses; i++) {
+        let house = {
+          // Houses are placed along the world x coordinate
+          x: 800 + i * houseSpacing, // start off-screen to the right
+          // Random vertical position between 250 and 450
+          y: Math.floor(Math.random() * (450 - 250 + 1)) + 250,
+          width: 80,
+          height: 100,
+          votes: Math.floor(Math.random() * 4) + 1, // 1 to 4 votes
+          hit: false,       // whether the leaflet hit the letterbox
+          distribution: null, // will be computed once the house is passed
+          // Define letterbox area (target) relative to house.x and house.y
+          letterbox: {
+            x: 30,  // relative horizontal offset
+            y: 70,  // relative vertical offset
+            width: 20,
+            height: 15
+          },
+          evaluated: false,  // ensure each house is tallied only once
+          collidedWithPlayer: false  // track if this house has already harmed the player
+        };
+        houses.push(house);
+      }
+    }
+
+    // Start or restart the game
+    function initGame() {
+      initHouses();
+      totalVotes = { blue: 0, red: 0, yellow: 0, green: 0 };
+      worldOffset = 0;
+      gameOver = false;
+      activeLeaflet = null;
+      // Reset player position and lives
+      player.y = canvas.height - 100;
+      player.lives = 3;
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Function to throw a leaflet from the player's position
+    function throwLeaflet() {
+      activeLeaflet = {
+        x: player.x + player.width,
+        y: player.y + player.height / 2,
+        radius: 5,
+        speed: 8
+      };
+    }
+
+    // Update game state on each frame
+    function update() {
+      // Allow the player to move up and down (within canvas bounds)
+      if (keys['ArrowUp']) {
+        player.y -= player.speed;
+        if (player.y < 0) player.y = 0;
+      }
+      if (keys['ArrowDown']) {
+        player.y += player.speed;
+        if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
+      }
+      // Advance the world to simulate the canvasser moving forward
+      worldOffset += 2;
+
+      // Update active leaflet position, if any
+      if (activeLeaflet) {
+        activeLeaflet.x += activeLeaflet.speed;
+        // Remove leaflet if it goes off screen
+        if (activeLeaflet.x > canvas.width) {
+          activeLeaflet = null;
+        }
+      }
+
+      // Check collision between player and houses for peril
+      houses.forEach(house => {
+        // Calculate house screen coordinates
+        let screenX = house.x - worldOffset + 100;
+        if (!house.collidedWithPlayer && 
+            player.x < screenX + house.width &&
+            player.x + player.width > screenX &&
+            player.y < house.y + house.height &&
+            player.y + player.height > house.y) {
+          house.collidedWithPlayer = true;
+          player.lives--;
+          // End game if lives drop to zero
+          if (player.lives <= 0) {
+            gameOver = true;
+            document.getElementById('playAgainContainer').style.display = 'block';
+          }
+        }
+      });
+
+      // Check collisions between leaflet and each house's letterbox
+      houses.forEach(house => {
+        // Calculate letterbox absolute position on canvas
+        const lb = {
+          x: house.x - worldOffset + 100, // adjusting for world offset and fixed margin
+          y: house.y + house.letterbox.y,
+          width: house.letterbox.width,
+          height: house.letterbox.height
+        };
+        if (activeLeaflet && !house.hit) {
+          if (circleRectCollision(activeLeaflet, lb)) {
+            house.hit = true;
+            // Compute vote distribution with a boost for your chosen party
+            house.distribution = computeVotes(house.votes, true);
+            // Add votes for all parties to the total
+            for (let p in house.distribution) {
+              totalVotes[p] += house.distribution[p];
+            }
+            activeLeaflet = null;
+          }
+        }
+      });
+
+      // For houses that the canvasser passes without a leaflet hit,
+      // compute a random vote distribution.
+      houses.forEach(house => {
+        let houseScreenX = house.x - worldOffset + 100;
+        if (!house.evaluated && houseScreenX + house.width < 0) {
+          if (!house.hit) {
+            house.distribution = computeVotes(house.votes, false);
+            for (let p in house.distribution) {
+              totalVotes[p] += house.distribution[p];
+            }
+          }
+          house.evaluated = true;
+        }
+      });
+
+      // End the round if all houses have been evaluated or player is out of lives
+      if (houses.every(h => h.evaluated) || player.lives <= 0) {
+        gameOver = true;
+        document.getElementById('playAgainContainer').style.display = 'block';
+      }
+    }
+
+    // Compute the vote distribution for a house.
+    // If 'boosted' is true, your party gets a 50% chance per vote; otherwise, 25% for each party.
+    function computeVotes(voteCount, boosted) {
+      let distribution = { blue: 0, red: 0, yellow: 0, green: 0 };
+      for (let i = 0; i < voteCount; i++) {
+        let rnd = Math.random();
+        if (boosted) {
+          if (rnd < 0.5) {
+            distribution[partyChoice]++;
+          } else {
+            // Distribute vote randomly among the other parties
+            let others = ['blue', 'red', 'yellow', 'green'].filter(col => col !== partyChoice);
+            let idx = Math.floor(Math.random() * others.length);
+            distribution[others[idx]]++;
+          }
+        } else {
+          if (rnd < 0.25) {
+            distribution['blue']++;
+          } else if (rnd < 0.5) {
+            distribution['red']++;
+          } else if (rnd < 0.75) {
+            distribution['yellow']++;
+          } else {
+            distribution['green']++;
+          }
+        }
+      }
+      return distribution;
+    }
+
+    // Basic circle-rectangle collision detection function
+    function circleRectCollision(circle, rect) {
+      let distX = Math.abs(circle.x - rect.x - rect.width / 2);
+      let distY = Math.abs(circle.y - rect.y - rect.height / 2);
+
+      if (distX > (rect.width / 2 + circle.radius)) return false;
+      if (distY > (rect.height / 2 + circle.radius)) return false;
+
+      if (distX <= (rect.width / 2)) return true;
+      if (distY <= (rect.height / 2)) return true;
+
+      let dx = distX - rect.width / 2;
+      let dy = distY - rect.height / 2;
+      return (dx * dx + dy * dy <= (circle.radius * circle.radius));
+    }
+
+    // Draw the background with a sky gradient and rolling hills
+    function drawBackground() {
+      // Draw sky gradient
+      let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#87CEEB'); // sky blue
+      gradient.addColorStop(1, '#ffffff'); // near white at the horizon
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw rolling hills
+      ctx.fillStyle = '#228B22'; // forest green
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height - 120);
+      // First hill curve
+      ctx.quadraticCurveTo(200, canvas.height - 300, 400, canvas.height - 120);
+      // Second hill curve
+      ctx.quadraticCurveTo(600, canvas.height - 50, 800, canvas.height - 120);
+      ctx.lineTo(canvas.width, canvas.height);
+      ctx.lineTo(0, canvas.height);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Draw the game objects on the canvas
+    function draw() {
+      // Clear the canvas and draw background with hills
+      drawBackground();
+
+      // Draw each house
+      houses.forEach(house => {
+        let screenX = house.x - worldOffset + 100;
+        if (screenX + house.width > 0 && screenX < canvas.width) {
+          // Draw house body
+          ctx.fillStyle = '#888';
+          ctx.fillRect(screenX, house.y, house.width, house.height);
+          // Draw a simple roof
+          ctx.fillStyle = '#444';
+          ctx.beginPath();
+          ctx.moveTo(screenX, house.y);
+          ctx.lineTo(screenX + house.width / 2, house.y - 30);
+          ctx.lineTo(screenX + house.width, house.y);
+          ctx.closePath();
+          ctx.fill();
+          // Draw the letterbox (target)
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(screenX + house.letterbox.x, house.y + house.letterbox.y, house.letterbox.width, house.letterbox.height);
+
+          // If the house has been evaluated, display its vote distribution
+          if (house.distribution) {
+            ctx.fillStyle = '#fff';
+            ctx.font = "10px Arial";
+            let text = `B:${house.distribution.blue} R:${house.distribution.red} Y:${house.distribution.yellow} G:${house.distribution.green}`;
+            ctx.fillText(text, screenX, house.y - 10);
+          }
+        }
+      });
+
+      // Draw the player (canvasser) as a simple rectangle
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Draw the active leaflet, if any
+      if (activeLeaflet) {
+        ctx.fillStyle = '#0f0';
+        ctx.beginPath();
+        ctx.arc(activeLeaflet.x, activeLeaflet.y, activeLeaflet.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Display the total votes for each party
+      ctx.fillStyle = '#fff';
+      ctx.font = "16px Arial";
+      ctx.fillText(`Votes: Blue: ${totalVotes.blue}  Red: ${totalVotes.red}  Yellow: ${totalVotes.yellow}  Green: ${totalVotes.green}`, 10, 20);
+      // Display remaining lives
+      ctx.fillText(`Lives: ${player.lives}`, 10, 40);
+
+      // If the game is over, overlay a final message
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = "30px Arial";
+        ctx.fillText("Round Over", canvas.width / 2 - 80, canvas.height / 2 - 20);
+        ctx.font = "20px Arial";
+        let voteSummary = `Blue: ${totalVotes.blue}  Red: ${totalVotes.red}  Yellow: ${totalVotes.yellow}  Green: ${totalVotes.green}`;
+        ctx.fillText(voteSummary, canvas.width / 2 - 180, canvas.height / 2 + 20);
+      }
+    }
+
+    // Main game loop
+    function gameLoop() {
+      if (!gameOver) {
+        update();
+      }
+      draw();
+      if (!gameOver) {
+        requestAnimationFrame(gameLoop);
+      }
+    }
+  </script>
+</body>
+</html>
