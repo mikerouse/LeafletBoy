@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Version 1</title>
+  <title>Political Canvasser with Phaser 3 - Mobile Controls</title>
   <style>
     body { margin: 0; }
     canvas { display: block; margin: 0 auto; background-color: #333333; }
@@ -23,7 +23,7 @@
 
   let playerParty = null;
 
-  // Menu Scene: Displays party selection (as colored blocks) and game rules.
+  // Menu Scene.
   class MenuScene extends Phaser.Scene {
     constructor() {
       super({ key: "MenuScene" });
@@ -41,10 +41,9 @@
                         "Don't trespass onto any houses or you will lose a life.";
       this.add.text(centerX, centerY - 80, rulesText, { font: "18px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
 
-      // Party selection: Show a colored block for each party.
+      // Party selection as colored blocks.
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
       parties.forEach((party, index) => {
-        // Draw a rectangle block.
         let block = this.add.rectangle(centerX, centerY + 20 + index * 60, 100, 40, partyColors[party]);
         block.setStrokeStyle(2, 0xffffff);
         block.setInteractive();
@@ -56,7 +55,7 @@
     }
   }
 
-  // Game Scene: Main gameplay and results display.
+  // Game Scene.
   class GameScene extends Phaser.Scene {
     constructor() {
       super({ key: "GameScene" });
@@ -64,14 +63,14 @@
     preload() {
       // Create a person-like player texture.
       let playerGfx = this.add.graphics();
-      // Head: circle (skin tone).
+      // Head.
       playerGfx.fillStyle(0xffcc99, 1);
       playerGfx.fillCircle(15, 10, 10);
-      // Body: rectangle in player's party color (if chosen, otherwise white).
+      // Body (using player's party color if set, else white).
       let bodyColor = playerParty ? partyColors[playerParty] : 0xffffff;
       playerGfx.fillStyle(bodyColor, 1);
       playerGfx.fillRect(5, 20, 20, 20);
-      // Legs: two small black rectangles.
+      // Legs.
       playerGfx.fillStyle(0x000000, 1);
       playerGfx.fillRect(8, 40, 4, 10);
       playerGfx.fillRect(18, 40, 4, 10);
@@ -86,29 +85,25 @@
       houseGfx.fillTriangle(0, 20, 40, -10, 80, 20);
       houseGfx.fillStyle(0x654321, 1);
       houseGfx.fillRect(30, 60, 20, 40);
-      // Draw letterbox as a horizontal rectangle.
-      // Door center is at x=40 so letterbox starts at x=40-6=34, width=12, height=4.
+      // Letterbox as a horizontal rectangle (centered on door).
       houseGfx.fillStyle(0xffffff, 1);
       houseGfx.fillRect(34, 75, 12, 4);
       houseGfx.generateTexture("house", 80, 100);
       houseGfx.destroy();
 
-      // Create leaflet texture as a portrait rectangle (4×10).
+      // Create leaflet texture as a portrait rectangle (4x10).
       let leafletGfx = this.add.graphics();
       leafletGfx.fillStyle(0x00ff00, 1);
       leafletGfx.fillRect(0, 0, 4, 10);
       leafletGfx.generateTexture("leaflet", 4, 10);
       leafletGfx.destroy();
 
-      // Preload the "bleep" sound.
       this.load.audio("bleep", "https://labs.phaser.io/assets/audio/SoundEffects/key.wav");
     }
     create() {
-      // Use dark grey background (set in config as well).
       this.houseSpacing = 300;
       this.totalHouses = 10;
       this.houses = [];
-      // Global votes update only on a successful leaflet delivery.
       this.totalVotes = { blue: 0, red: 0, yellow: 0, green: 0, turquoise: 0 };
       this.playerLives = 3;
       this.gameOver = false;
@@ -116,11 +111,9 @@
       this.leaflet = null;
       this.houseSpeed = 2;
 
-      // Create player sprite.
       this.player = this.physics.add.sprite(400, 500, "player");
       this.player.setCollideWorldBounds(true);
 
-      // Create houses.
       this.houseGroup = this.physics.add.group();
       for (let i = 0; i < this.totalHouses; i++) {
         let x = 800 + i * this.houseSpacing;
@@ -128,40 +121,68 @@
         let house = this.physics.add.sprite(x, y, "house");
         house.setOrigin(0, 0);
         house.setImmovable(true);
-        // Each house gets a random number of voters (1–4).
         house.votes = Phaser.Math.Between(1, 4);
         house.hitLetterbox = false;
         house.evaluated = false;
         house.collided = false;
-        // Define full house rectangle.
         house.fullRect = new Phaser.Geom.Rectangle(x, y, 80, 100);
-        // Define door region (safe passage): door at (30,60) relative to house.
         house.doorRect = new Phaser.Geom.Rectangle(x + 30, y + 60, 20, 40);
-        // Define letterbox region (target): letterbox at (34,75) relative to house.
         house.letterbox = new Phaser.Geom.Rectangle(x + 34, y + 75, 12, 4);
-        // Create door number text above the door (showing number of voters).
         house.doorNumberText = this.add.text(x + 40, y + 50, house.votes.toString(), { font: "16px Arial", fill: "#fff" }).setOrigin(0.5);
         this.houses.push(house);
         this.houseGroup.add(house);
       }
 
-      // Create a permanent HUD for vote counts.
-      // We'll show a block and a text for each party.
+      // Permanent HUD for votes.
       this.hudBlocks = {};
       const hudStartX = 20, hudStartY = 20, blockSize = 20, blockGap = 10, partyGap = 120;
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
       parties.forEach((party, index) => {
-        // Create a colored block.
         let block = this.add.rectangle(hudStartX, hudStartY + index * partyGap, blockSize, blockSize, partyColors[party]).setOrigin(0, 0);
-        // Create a text to display the vote count.
         let txt = this.add.text(hudStartX + blockSize + blockGap, hudStartY + index * partyGap, "0", { font: "16px Arial", fill: "#fff" });
         this.hudBlocks[party] = { block, txt };
       });
-
-      // Lives text remains in the upper HUD.
       this.livesText = this.add.text(20, hudStartY + parties.length * partyGap, "Lives: " + this.playerLives, { font: "16px Arial", fill: "#fff" });
 
-      // Set up keyboard input (arrows and WASD).
+      // On-screen mobile buttons.
+      // D-pad (bottom left).
+      this.leftBtn = this.add.rectangle(60, 540, 50, 50, 0xffffff, 0.5).setInteractive();
+      this.rightBtn = this.add.rectangle(140, 540, 50, 50, 0xffffff, 0.5).setInteractive();
+      this.upBtn = this.add.rectangle(100, 490, 50, 50, 0xffffff, 0.5).setInteractive();
+      this.downBtn = this.add.rectangle(100, 590, 50, 50, 0xffffff, 0.5).setInteractive();
+      // Fire button (bottom right).
+      this.fireBtn = this.add.rectangle(740, 540, 60, 60, 0xff0000, 0.5).setInteractive();
+
+      // Movement flags.
+      this.moveLeft = false;
+      this.moveRight = false;
+      this.moveUp = false;
+      this.moveDown = false;
+
+      // Set up button events.
+      this.leftBtn.on("pointerdown", () => { this.moveLeft = true; });
+      this.leftBtn.on("pointerup", () => { this.moveLeft = false; });
+      this.leftBtn.on("pointerout", () => { this.moveLeft = false; });
+      
+      this.rightBtn.on("pointerdown", () => { this.moveRight = true; });
+      this.rightBtn.on("pointerup", () => { this.moveRight = false; });
+      this.rightBtn.on("pointerout", () => { this.moveRight = false; });
+      
+      this.upBtn.on("pointerdown", () => { this.moveUp = true; });
+      this.upBtn.on("pointerup", () => { this.moveUp = false; });
+      this.upBtn.on("pointerout", () => { this.moveUp = false; });
+      
+      this.downBtn.on("pointerdown", () => { this.moveDown = true; });
+      this.downBtn.on("pointerup", () => { this.moveDown = false; });
+      this.downBtn.on("pointerout", () => { this.moveDown = false; });
+      
+      this.fireBtn.on("pointerdown", () => {
+        if (!this.leaflet) {
+          this.fireLeaflet();
+        }
+      });
+
+      // Keyboard input (arrows and WASD).
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys({ 
         up: Phaser.Input.Keyboard.KeyCodes.W, 
@@ -174,7 +195,7 @@
       // Player-house collision.
       this.physics.add.overlap(this.player, this.houseGroup, this.handlePlayerHouseCollision, null, this);
 
-      // Set up Game Over text.
+      // Game Over text.
       this.gameOverText = this.add.text(400, 300, "Game Over\nClick to Play Again", { font: "32px Arial", fill: "#fff", align: "center" });
       this.gameOverText.setOrigin(0.5);
       this.gameOverText.setVisible(false);
@@ -184,12 +205,14 @@
         }
       });
     }
+    fireLeaflet() {
+      this.leaflet = this.physics.add.sprite(this.player.x, this.player.y - 15, "leaflet");
+      this.leaflet.setVelocityY(-300);
+    }
     updateHUD() {
-      // Update the permanent HUD for each party.
       for (const party in this.hudBlocks) {
         this.hudBlocks[party].txt.setText(this.totalVotes[party] ? this.totalVotes[party].toString() : "0");
       }
-      // Update lives text.
       this.livesText.setText("Lives: " + this.playerLives);
     }
     handlePlayerHouseCollision(player, house) {
@@ -242,53 +265,9 @@
         onComplete: () => { explosion.destroy(); }
       });
     }
-    showResults() {
-      let scores = [
-        { party: "blue", score: this.totalVotes.blue },
-        { party: "red", score: this.totalVotes.red },
-        { party: "yellow", score: this.totalVotes.yellow },
-        { party: "green", score: this.totalVotes.green },
-        { party: "turquoise", score: this.totalVotes.turquoise }
-      ];
-      scores.sort(function(a, b) { return b.score - a.score; });
-      let maxScore = scores[0].score || 1;
-      const scoreColors = {
-        blue: partyColors.blue,
-        red: partyColors.red,
-        yellow: partyColors.yellow,
-        green: partyColors.green,
-        turquoise: partyColors.turquoise
-      };
-      let chartX = 50;
-      let chartY = 550;
-      let barWidth = 100;
-      let maxBarHeight = 200;
-      let gap = 20;
-      let graphics = this.add.graphics();
-      scores.forEach(function(entry, index) {
-        let barHeight = (entry.score / maxScore) * maxBarHeight;
-        let x = chartX + index * (barWidth + gap);
-        let y = chartY - barHeight;
-        graphics.fillStyle(scoreColors[entry.party], 1);
-        graphics.fillRect(x, y, barWidth, barHeight);
-        // Instead of party names, display a block.
-        this.add.rectangle(x + barWidth / 2, chartY + 30, 20, 20, scoreColors[entry.party]).setOrigin(0.5);
-        // Display vote count below the block.
-        this.add.text(x + barWidth / 2, chartY + 55, entry.score.toString(), { font: "20px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
-      }, this);
-      if (!this.playerLost) {
-        if (scores[0].score > (scores[1] ? scores[1].score : 0)) {
-          if (scores[0].party === playerParty) {
-            this.add.text(400, 100, "WINNER", { font: "80px Arial", fill: "#fff" }).setOrigin(0.5);
-          }
-        } else {
-          this.add.text(400, 100, "DRAW LOTS", { font: "80px Arial", fill: "#fff" }).setOrigin(0.5);
-        }
-      }
-    }
     update(time, delta) {
       if (this.gameOver) return;
-      // Allow horizontal movement via arrow keys or WASD.
+      // Keyboard movement.
       if (this.cursors.left.isDown || this.wasd.left.isDown) {
         this.player.setVelocityX(-150);
       } else if (this.cursors.right.isDown || this.wasd.right.isDown) {
@@ -296,7 +275,6 @@
       } else {
         this.player.setVelocityX(0);
       }
-      // Allow vertical movement.
       if (this.cursors.up.isDown || this.wasd.up.isDown) {
         this.player.setVelocityY(-150);
       } else if (this.cursors.down.isDown || this.wasd.down.isDown) {
@@ -304,11 +282,17 @@
       } else {
         this.player.setVelocityY(0);
       }
-      // Launch a leaflet on space press.
+      // Mobile button movement.
+      if (this.moveLeft) { this.player.setVelocityX(-150); }
+      if (this.moveRight) { this.player.setVelocityX(150); }
+      if (this.moveUp) { this.player.setVelocityY(-150); }
+      if (this.moveDown) { this.player.setVelocityY(150); }
+
+      // Launch leaflet on keyboard.
       if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.leaflet) {
-        this.leaflet = this.physics.add.sprite(this.player.x, this.player.y - 15, "leaflet");
-        this.leaflet.setVelocityY(-300);
+        this.fireLeaflet();
       }
+      // Process leaflet.
       if (this.leaflet) {
         if (this.leaflet.y < 0) {
           this.leaflet.destroy();
@@ -426,9 +410,8 @@
         let y = chartY - barHeight;
         graphics.fillStyle(scoreColors[entry.party], 1);
         graphics.fillRect(x, y, barWidth, barHeight);
-        // Instead of party names, display a colored block.
+        // Display a colored block and vote count.
         this.add.rectangle(x + barWidth / 2, chartY + 30, 20, 20, scoreColors[entry.party]).setOrigin(0.5);
-        // Display vote count below the block.
         this.add.text(x + barWidth / 2, chartY + 55, entry.score.toString(), { font: "20px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
       }, this);
       if (!this.playerLost) {
