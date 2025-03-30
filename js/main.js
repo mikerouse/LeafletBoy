@@ -20,7 +20,7 @@ const partyColors = {
       const centerX = this.cameras.main.width / 2;
       const centerY = this.cameras.main.height / 2;
       this.add.text(centerX, centerY - 140, "Choose Your Party", { font: "32px Arial", fill: "#fff" }).setOrigin(0.5);
-  
+      
       const rulesText = "Move with arrows or WASD and swipe (drag) your avatar to move.\n" +
                         "Tap anywhere (that isn’t dragging your character) to deliver a leaflet.\n" +
                         "Each house shows a door number (voter count) above its door.\n" +
@@ -94,7 +94,7 @@ const partyColors = {
       this.leaflet = null;
       this.houseSpeed = 2;
   
-      // Create player near bottom center.
+      // Player starts near bottom center.
       this.player = this.physics.add.sprite(300, 800, "player");
       this.player.setCollideWorldBounds(true);
       this.player.setInteractive();
@@ -104,10 +104,11 @@ const partyColors = {
         gameObject.y = Phaser.Math.Clamp(dragY, 0, this.sys.game.config.height);
       });
   
-      // Create houses falling from the top.
+      // Create houses that fall from the top.
       this.houseGroup = this.physics.add.group();
       for (let i = 0; i < this.totalHouses; i++) {
-        let x = Phaser.Math.Between(0, 520);
+        // Spawn houses so they fully appear on-screen horizontally.
+        let x = Phaser.Math.Between(0, this.sys.game.config.width - 80);
         let y = -Phaser.Math.Between(50, 150) - i * this.houseSpacing;
         let house = this.physics.add.sprite(x, y, "house");
         house.setOrigin(0, 0);
@@ -144,11 +145,11 @@ const partyColors = {
   
       // Keyboard input.
       this.cursors = this.input.keyboard.createCursorKeys();
-      this.wasd = this.input.keyboard.addKeys({
-        up: Phaser.Input.Keyboard.KeyCodes.W,
-        left: Phaser.Input.Keyboard.KeyCodes.A,
-        down: Phaser.Input.Keyboard.KeyCodes.S,
-        right: Phaser.Input.Keyboard.KeyCodes.D
+      this.wasd = this.input.keyboard.addKeys({ 
+        up: Phaser.Input.Keyboard.KeyCodes.W, 
+        left: Phaser.Input.Keyboard.KeyCodes.A, 
+        down: Phaser.Input.Keyboard.KeyCodes.S, 
+        right: Phaser.Input.Keyboard.KeyCodes.D 
       });
       this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
   
@@ -267,7 +268,9 @@ const partyColors = {
                       case "turquoise": tint = partyColors.turquoise; break;
                     }
                     house.setTint(tint);
-                  } else { house.clearTint(); }
+                  } else {
+                    house.clearTint();
+                  }
                   this.sound.play("bleep");
                 }
                 this.leaflet.destroy();
@@ -291,16 +294,22 @@ const partyColors = {
           house.fullRect = new Phaser.Geom.Rectangle(house.x, house.y, 80, 100);
           house.doorRect.setTo(house.x + 30, house.y + 60, 20, 40);
           house.letterbox.setTo(house.x + 34, house.y + 75, 12, 4);
-          if (house.doorNumberText) { house.doorNumberText.setPosition(house.x + 40, house.y + 50); }
+          if (house.doorNumberText) {
+            house.doorNumberText.setPosition(house.x + 40, house.y + 50);
+          }
           if (house.y > this.sys.game.config.height) {
-            if (house.doorNumberText) { house.doorNumberText.destroy(); }
+            if (house.doorNumberText) {
+              house.doorNumberText.destroy();
+            }
             house.evaluated = true;
             house.destroy();
           }
         }
       }, this);
   
-      if (this.houses.every(function(h) { return h.evaluated; })) { this.endGame(); }
+      if (this.houses.every(function(h) { return h.evaluated; })) {
+        this.endGame();
+      }
     }
     endGame() {
       this.gameOver = true;
@@ -309,7 +318,6 @@ const partyColors = {
         this.leaflet.destroy();
         this.leaflet = null;
       }
-      this.gameOverText.setVisible(false);
       this.showResults();
     }
     showResults() {
@@ -353,6 +361,12 @@ const partyColors = {
           this.add.text(240, 100, "DRAW LOTS", { font: "80px Arial", fill: "#fff" }).setOrigin(0.5);
         }
       }
+      // Add a "Play Again" button.
+      let playAgainBtn = this.add.text(240, 650, "Play Again", { font: "32px Arial", fill: "#fff", backgroundColor: "#000", padding: { x: 10, y: 5 } }).setOrigin(0.5);
+      playAgainBtn.setInteractive();
+      playAgainBtn.on("pointerdown", () => {
+        this.scene.restart();
+      });
     }
   }
   
@@ -360,16 +374,15 @@ const partyColors = {
     type: Phaser.AUTO,
     width: 480,
     height: 900,
-    parent: "game-container",  // Ensures the game renders inside the div with id "game-container"
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
     },
     backgroundColor: "#333333",
     physics: { default: "arcade", arcade: { debug: false } },
-    scene: [MenuScene, GameScene]
+    scene: [MenuScene, GameScene],
+    parent: "game-container" // if you're using an external container in index.php
   };
   
   const game = new Phaser.Game(config);
-  
   
