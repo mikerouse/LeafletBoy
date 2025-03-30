@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Political Canvasser with Phaser 3 - Results & Fireworks</title>
+  <title>Political Canvasser with Phaser 3 - Results & Winner</title>
   <style>
     body { margin: 0; }
     canvas { display: block; margin: 0 auto; }
@@ -17,20 +17,20 @@
   // Menu Scene: Party selection
   class MenuScene extends Phaser.Scene {
     constructor() {
-      super({ key: 'MenuScene' });
+      super({ key: "MenuScene" });
     }
     create() {
       const centerX = this.cameras.main.width / 2;
       const centerY = this.cameras.main.height / 2;
-      this.add.text(centerX, centerY - 100, 'Choose Your Party', { font: '32px Arial', fill: '#fff' }).setOrigin(0.5);
-      const parties = ['blue', 'red', 'yellow', 'green'];
+      this.add.text(centerX, centerY - 100, "Choose Your Party", { font: "32px Arial", fill: "#fff" }).setOrigin(0.5);
+      const parties = ["blue", "red", "yellow", "green"];
       parties.forEach((party, index) => {
-        let btn = this.add.text(centerX, centerY - 20 + index * 50, party.toUpperCase(), { font: '28px Arial', fill: party });
+        let btn = this.add.text(centerX, centerY - 20 + index * 50, party.toUpperCase(), { font: "28px Arial", fill: party });
         btn.setOrigin(0.5);
         btn.setInteractive();
-        btn.on('pointerdown', () => {
+        btn.on("pointerdown", () => {
           playerParty = party;
-          this.scene.start('GameScene');
+          this.scene.start("GameScene");
         });
       });
     }
@@ -39,14 +39,14 @@
   // Game Scene: Main gameplay and results display.
   class GameScene extends Phaser.Scene {
     constructor() {
-      super({ key: 'GameScene' });
+      super({ key: "GameScene" });
     }
     preload() {
       // Create player texture (white square 30x30).
       this.add.graphics()
         .fillStyle(0xffffff)
         .fillRect(0, 0, 30, 30)
-        .generateTexture('player', 30, 30)
+        .generateTexture("player", 30, 30)
         .destroy();
 
       // Create house texture with door and letterbox.
@@ -59,25 +59,18 @@
       houseGfx.fillRect(30, 60, 20, 40);
       houseGfx.fillStyle(0xffffff);
       houseGfx.fillRect(38, 75, 10, 10);
-      houseGfx.generateTexture('house', 80, 100);
+      houseGfx.generateTexture("house", 80, 100);
       houseGfx.destroy();
 
       // Create leaflet texture (small green circle, radius 5).
       let leafletGfx = this.add.graphics();
       leafletGfx.fillStyle(0x00ff00);
       leafletGfx.fillCircle(5, 5, 5);
-      leafletGfx.generateTexture('leaflet', 10, 10);
+      leafletGfx.generateTexture("leaflet", 10, 10);
       leafletGfx.destroy();
 
-      // Generate a simple spark texture for fireworks.
-      this.add.graphics()
-        .fillStyle(0xffffff)
-        .fillCircle(4, 4, 4)
-        .generateTexture('spark', 8, 8)
-        .destroy();
-
       // Preload the "bleep" sound.
-      this.load.audio('bleep', 'https://labs.phaser.io/assets/audio/SoundEffects/key.wav');
+      this.load.audio("bleep", "https://labs.phaser.io/assets/audio/SoundEffects/key.wav");
     }
     create() {
       // Use default black background.
@@ -88,19 +81,20 @@
       this.totalVotes = { blue: 0, red: 0, yellow: 0, green: 0 };
       this.playerLives = 3;
       this.gameOver = false;
+      this.playerLost = false;  // Flag to indicate if player lost (0 lives).
       this.leaflet = null;
       this.houseSpeed = 2;
 
-      // Create player sprite at horizontal centre.
-      this.player = this.physics.add.sprite(400, 500, 'player');
+      // Create player sprite at default spawn (400,500).
+      this.player = this.physics.add.sprite(400, 500, "player");
       this.player.setCollideWorldBounds(true);
 
-      // Create houses (top-left positioning).
+      // Create houses (positioned using top-left coordinates).
       this.houseGroup = this.physics.add.group();
       for (let i = 0; i < this.totalHouses; i++) {
         let x = 800 + i * this.houseSpacing;
         let y = Phaser.Math.Between(250, 450);
-        let house = this.physics.add.sprite(x, y, 'house');
+        let house = this.physics.add.sprite(x, y, "house");
         house.setOrigin(0, 0);
         house.setImmovable(true);
         house.votes = Phaser.Math.Between(1, 4);
@@ -109,15 +103,15 @@
         house.collided = false;
         // Define full house rectangle.
         house.fullRect = new Phaser.Geom.Rectangle(x, y, 80, 100);
-        // Door region (safe passage): door at (30,60) relative to house.
+        // Define door region (safe passage): door at (30,60) relative to house.
         house.doorRect = new Phaser.Geom.Rectangle(x + 30, y + 60, 20, 40);
-        // Letterbox region (target): at (38,75) relative to house.
+        // Define letterbox region (target): at (38,75) relative to house.
         house.letterbox = new Phaser.Geom.Rectangle(x + 38, y + 75, 10, 10);
         this.houses.push(house);
         this.houseGroup.add(house);
       }
 
-      // Set up keyboard input (vertical movement only).
+      // Set up keyboard input (vertical, horizontal movement).
       this.cursors = this.input.keyboard.createCursorKeys();
       this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
@@ -129,7 +123,7 @@
       this.livesText = this.add.text(10, 30, "", { font: "16px Arial", fill: "#fff" });
       this.updateHUD();
 
-      // Game Over text (hidden until round ends).
+      // Set up Game Over text (hidden until round ends).
       this.gameOverText = this.add.text(400, 300, "Game Over\nClick to Play Again", { font: "32px Arial", fill: "#fff", align: "center" });
       this.gameOverText.setOrigin(0.5);
       this.gameOverText.setVisible(false);
@@ -143,15 +137,17 @@
       this.voteText.setText("Votes - Blue: " + this.totalVotes.blue + "  Red: " + this.totalVotes.red + "  Yellow: " + this.totalVotes.yellow + "  Green: " + this.totalVotes.green);
       this.livesText.setText("Lives: " + this.playerLives);
     }
-    // On player-house collision, lose a life and respawn.
+    // When the player collides with a house, lose a life and respawn.
     handlePlayerHouseCollision(player, house) {
       if (!house.collided) {
         house.collided = true;
         this.playerLives--;
         this.updateHUD();
         if (this.playerLives > 0) {
+          // Respawn at default spawn.
           this.player.setPosition(400, 500);
         } else {
+          this.playerLost = true;
           this.endGame();
         }
       }
@@ -164,25 +160,25 @@
           if (rnd < 0.5) {
             distribution[playerParty]++;
           } else {
-            let others = ['blue', 'red', 'yellow', 'green'].filter(p => p !== playerParty);
+            let others = ["blue", "red", "yellow", "green"].filter(p => p !== playerParty);
             let idx = Math.floor(Math.random() * others.length);
             distribution[others[idx]]++;
           }
         } else {
           if (rnd < 0.25) {
-            distribution['blue']++;
+            distribution["blue"]++;
           } else if (rnd < 0.5) {
-            distribution['red']++;
+            distribution["red"]++;
           } else if (rnd < 0.75) {
-            distribution['yellow']++;
+            distribution["yellow"]++;
           } else {
-            distribution['green']++;
+            distribution["green"]++;
           }
         }
       }
       return distribution;
     }
-    // Brief explosion effect for a mis-delivered leaflet.
+    // Creates a brief explosion effect for a mis-delivered leaflet.
     explodeLeaflet(leaflet) {
       let explosion = this.add.circle(leaflet.x, leaflet.y, 10, 0xff0000);
       this.tweens.add({
@@ -192,13 +188,13 @@
         onComplete: () => { explosion.destroy(); }
       });
     }
-    // Display bar chart results at the end of the round.
+    // At the end of the round, display a bar chart of scores.
     showResults() {
       let scores = [
-        { party: 'blue', score: this.totalVotes.blue },
-        { party: 'red', score: this.totalVotes.red },
-        { party: 'yellow', score: this.totalVotes.yellow },
-        { party: 'green', score: this.totalVotes.green }
+        { party: "blue", score: this.totalVotes.blue },
+        { party: "red", score: this.totalVotes.red },
+        { party: "yellow", score: this.totalVotes.yellow },
+        { party: "green", score: this.totalVotes.green }
       ];
       // Sort descending so highest score is first.
       scores.sort(function(a, b) { return b.score - a.score; });
@@ -219,32 +215,21 @@
         this.add.text(x + barWidth / 2, chartY + 5, entry.party.toUpperCase() + "\n" + entry.score,
           { font: "20px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
       }, this);
-      // If the winning party matches the player's chosen party, spawn fireworks.
-      if (scores[0].party === playerParty) {
-        this.spawnFireworks();
+      // If the winning party matches the player's chosen party and the player did not lose, display "WINNER".
+      if (!this.playerLost && scores[0].party === playerParty) {
+        this.add.text(400, 100, "WINNER", { font: "80px Arial", fill: "#fff" }).setOrigin(0.5);
       }
-    }
-    // Spawn fireworks using emitParticleAt.
-    spawnFireworks() {
-      this.time.addEvent({
-        delay: 500,
-        repeat: 5,
-        callback: () => {
-          let x = Phaser.Math.Between(100, 700);
-          let y = Phaser.Math.Between(50, 300);
-          let particles = this.add.particles('spark');
-          particles.emitParticleAt(x, y, 30);
-          this.time.delayedCall(1000, function() {
-            particles.destroy();
-          }, [], this);
-        }
-      });
     }
     update(time, delta) {
       if (this.gameOver) return;
-      // Lock player x-position.
-      this.player.x = 400;
-      // Vertical movement.
+      // Allow horizontal and vertical movement.
+      if (this.cursors.left.isDown) {
+        this.player.setVelocityX(-150);
+      } else if (this.cursors.right.isDown) {
+        this.player.setVelocityX(150);
+      } else {
+        this.player.setVelocityX(0);
+      }
       if (this.cursors.up.isDown) {
         this.player.setVelocityY(-150);
       } else if (this.cursors.down.isDown) {
@@ -252,9 +237,9 @@
       } else {
         this.player.setVelocityY(0);
       }
-      // Launch leaflet on space press (one at a time).
+      // Launch a leaflet on space press (only one at a time).
       if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.leaflet) {
-        this.leaflet = this.physics.add.sprite(this.player.x, this.player.y - 15, 'leaflet');
+        this.leaflet = this.physics.add.sprite(this.player.x, this.player.y - 15, "leaflet");
         this.leaflet.setVelocityY(-300);
       }
       if (this.leaflet) {
