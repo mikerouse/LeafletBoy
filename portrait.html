@@ -5,7 +5,7 @@
   <title>Political Canvasser - Portrait Mobile Version</title>
   <style>
     body { margin: 0; }
-    /* The canvas background will be set via Phaser configuration */
+    /* The canvas background is set in Phaser config */
   </style>
   <!-- Import Phaser 3 from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
@@ -33,13 +33,15 @@
       const centerY = this.cameras.main.height / 2;
       this.add.text(centerX, centerY - 140, "Choose Your Party", { font: "32px Arial", fill: "#fff" }).setOrigin(0.5);
       
-      const rulesText = "Move with arrows or WASD (or tap the on-screen buttons) and press spacebar (or tap the fire button) to deliver a leaflet.\n" +
-                        "Each house displays a door number (voter count) above its door.\n" +
-                        "Houses fall from the top – position yourself underneath a house to deliver a leaflet into its letterbox, then move away!\n" +
-                        "Don't trespass onto a house or you lose a life.";
+      const rulesText = "Move with arrows or WASD (or tap the on-screen buttons) and press spacebar (or tap anywhere\n" +
+                        "that isn't a directional button) to deliver a leaflet.\n" +
+                        "Each house shows a door number (voter count) above its door.\n" +
+                        "Houses fall from the top – get underneath a falling house to deliver a leaflet into its letterbox,\n" +
+                        "then move away before you get hit.\n" +
+                        "Don't trespass onto a house or you'll lose a life.";
       this.add.text(centerX, centerY - 80, rulesText, { font: "18px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
       
-      // Party selection: display each party as a colored block.
+      // Party selection: Display each party as a colored block.
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
       parties.forEach((party, index) => {
         let block = this.add.rectangle(centerX, centerY + 20 + index * 60, 100, 40, partyColors[party]);
@@ -85,7 +87,7 @@
       houseGfx.generateTexture("house", 80, 100);
       houseGfx.destroy();
 
-      // Create leaflet texture as a portrait rectangle (4×10).
+      // Create leaflet texture as a portrait rectangle (4x10).
       let leafletGfx = this.add.graphics();
       leafletGfx.fillStyle(0x00ff00, 1);
       leafletGfx.fillRect(0, 0, 4, 10);
@@ -106,14 +108,14 @@
       this.leaflet = null;
       this.houseSpeed = 2;
 
-      // Player starts near bottom center.
+      // Player starts near the bottom center.
       this.player = this.physics.add.sprite(300, 800, "player");
       this.player.setCollideWorldBounds(true);
 
       // Create houses that fall downward.
       this.houseGroup = this.physics.add.group();
       for (let i = 0; i < this.totalHouses; i++) {
-        let x = Phaser.Math.Between(0, 520);
+        let x = Phaser.Math.Between(0, 520); // 600-80=520 so houses fit horizontally.
         let y = -Phaser.Math.Between(50, 150) - i * this.houseSpacing;
         let house = this.physics.add.sprite(x, y, "house");
         house.setOrigin(0, 0);
@@ -130,7 +132,7 @@
         this.houseGroup.add(house);
       }
 
-      // Permanent HUD for votes.
+      // Create a permanent HUD for votes.
       this.hudBlocks = {};
       const hudStartX = 20, hudStartY = 20, blockSize = 20, blockGap = 10, partyGap = 120;
       const parties = ["blue", "red", "yellow", "green", "turquoise"];
@@ -141,35 +143,44 @@
       });
       this.livesText = this.add.text(20, hudStartY + parties.length * partyGap, "Lives: " + this.playerLives, { font: "16px Arial", fill: "#fff" });
 
-      // On-screen mobile buttons.
+      // On-screen mobile directional buttons.
       this.leftBtn = this.add.rectangle(40, 840, 50, 50, 0xffffff, 0.5).setInteractive();
       this.rightBtn = this.add.rectangle(120, 840, 50, 50, 0xffffff, 0.5).setInteractive();
       this.upBtn = this.add.rectangle(80, 800, 50, 50, 0xffffff, 0.5).setInteractive();
       this.downBtn = this.add.rectangle(80, 880, 50, 50, 0xffffff, 0.5).setInteractive();
-      this.fireBtn = this.add.rectangle(520, 840, 60, 60, 0xff0000, 0.5).setInteractive();
-
-      this.moveLeft = false;
-      this.moveRight = false;
-      this.moveUp = false;
-      this.moveDown = false;
-
-      this.leftBtn.on("pointerdown", () => { this.moveLeft = true; });
-      this.leftBtn.on("pointerup", () => { this.moveLeft = false; });
-      this.leftBtn.on("pointerout", () => { this.moveLeft = false; });
-      this.rightBtn.on("pointerdown", () => { this.moveRight = true; });
-      this.rightBtn.on("pointerup", () => { this.moveRight = false; });
-      this.rightBtn.on("pointerout", () => { this.moveRight = false; });
-      this.upBtn.on("pointerdown", () => { this.moveUp = true; });
-      this.upBtn.on("pointerup", () => { this.moveUp = false; });
-      this.upBtn.on("pointerout", () => { this.moveUp = false; });
-      this.downBtn.on("pointerdown", () => { this.moveDown = true; });
-      this.downBtn.on("pointerup", () => { this.moveDown = false; });
-      this.downBtn.on("pointerout", () => { this.moveDown = false; });
-      this.fireBtn.on("pointerdown", () => {
-        if (!this.leaflet) { this.fireLeaflet(); }
+      // Call stopPropagation so that these buttons don’t fire the global pointerdown event.
+      [this.leftBtn, this.rightBtn, this.upBtn, this.downBtn].forEach(btn => {
+        btn.on("pointerdown", function (pointer, currentlyOver) {
+          pointer.event.stopPropagation();
+          // Set movement flag.
+          if (btn === this.leftBtn) { this.moveLeft = true; }
+          else if (btn === this.rightBtn) { this.moveRight = true; }
+          else if (btn === this.upBtn) { this.moveUp = true; }
+          else if (btn === this.downBtn) { this.moveDown = true; }
+        }, this);
+        btn.on("pointerup", function () { 
+          if (btn === this.leftBtn) { this.moveLeft = false; }
+          else if (btn === this.rightBtn) { this.moveRight = false; }
+          else if (btn === this.upBtn) { this.moveUp = false; }
+          else if (btn === this.downBtn) { this.moveDown = false; }
+        }, this);
+        btn.on("pointerout", function () {
+          if (btn === this.leftBtn) { this.moveLeft = false; }
+          else if (btn === this.rightBtn) { this.moveRight = false; }
+          else if (btn === this.upBtn) { this.moveUp = false; }
+          else if (btn === this.downBtn) { this.moveDown = false; }
+        }, this);
       });
 
-      // Keyboard input.
+      // Global pointerdown event to fire a leaflet if not tapping on a directional button.
+      this.input.on("pointerdown", (pointer, currentlyOver) => {
+        // If the pointer event did not hit any interactive object (or didn't hit one of our D-pad buttons), fire leaflet.
+        if (!currentlyOver || currentlyOver.length === 0) {
+          if (!this.leaflet) { this.fireLeaflet(); }
+        }
+      }, this);
+
+      // Keyboard input (arrows and WASD).
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys({ 
         up: Phaser.Input.Keyboard.KeyCodes.W, 
@@ -270,15 +281,12 @@
             house.fullRect = new Phaser.Geom.Rectangle(house.x, house.y, 80, 100);
             house.doorRect = new Phaser.Geom.Rectangle(house.x + 30, house.y + 60, 20, 40);
             house.letterbox = new Phaser.Geom.Rectangle(house.x + 34, house.y + 75, 12, 4);
-            // Use intersection test: if the leaflet's bounding box overlaps the letterbox.
             if (Phaser.Geom.Rectangle.Overlaps(house.fullRect, this.leaflet.getBounds())) {
               if (Phaser.Geom.Rectangle.Overlaps(house.letterbox, this.leaflet.getBounds())) {
                 if (!house.hitLetterbox) {
                   house.hitLetterbox = true;
                   let distribution = this.computeVotes(house.votes, true);
-                  for (let p in distribution) {
-                    this.totalVotes[p] += distribution[p];
-                  }
+                  for (let p in distribution) { this.totalVotes[p] += distribution[p]; }
                   this.updateHUD();
                   let maxVotes = Math.max(distribution.blue, distribution.red, distribution.yellow, distribution.green, distribution.turquoise);
                   let winners = [];
@@ -297,9 +305,7 @@
                       case "turquoise": tint = partyColors.turquoise; break;
                     }
                     house.setTint(tint);
-                  } else {
-                    house.clearTint();
-                  }
+                  } else { house.clearTint(); }
                   this.sound.play("bleep");
                 }
                 this.leaflet.destroy();
@@ -330,9 +336,7 @@
           }
         }
       }, this);
-      if (this.houses.every(function(h) { return h.evaluated; })) {
-        this.endGame();
-      }
+      if (this.houses.every(function(h) { return h.evaluated; })) { this.endGame(); }
     }
     endGame() {
       this.gameOver = true;
