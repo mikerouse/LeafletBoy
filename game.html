@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Political Canvasser with Phaser 3 - Color Blocks HUD</title>
+  <title>Political Canvasser with Phaser 3 - Permanent HUD</title>
   <style>
     body { margin: 0; }
-    canvas { display: block; margin: 0 auto; }
+    canvas { display: block; margin: 0 auto; background-color: #333333; }
   </style>
   <!-- Import Phaser 3 from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
@@ -62,12 +62,12 @@
       super({ key: "GameScene" });
     }
     preload() {
-      // Generate a person-like player texture.
+      // Create a person-like player texture.
       let playerGfx = this.add.graphics();
       // Head: circle (skin tone).
       playerGfx.fillStyle(0xffcc99, 1);
       playerGfx.fillCircle(15, 10, 10);
-      // Body: rectangle (use player's party color if defined; otherwise white).
+      // Body: rectangle in player's party color (if chosen, otherwise white).
       let bodyColor = playerParty ? partyColors[playerParty] : 0xffffff;
       playerGfx.fillStyle(bodyColor, 1);
       playerGfx.fillRect(5, 20, 20, 20);
@@ -87,7 +87,7 @@
       houseGfx.fillStyle(0x654321, 1);
       houseGfx.fillRect(30, 60, 20, 40);
       // Draw letterbox as a horizontal rectangle.
-      // Door center = 40, so letterbox starts at x = 40 - 6 = 34, width = 12, height = 4.
+      // Door center is at x=40 so letterbox starts at x=40-6=34, width=12, height=4.
       houseGfx.fillStyle(0xffffff, 1);
       houseGfx.fillRect(34, 75, 12, 4);
       houseGfx.generateTexture("house", 80, 100);
@@ -104,10 +104,11 @@
       this.load.audio("bleep", "https://labs.phaser.io/assets/audio/SoundEffects/key.wav");
     }
     create() {
-      // Use dark grey background.
+      // Use dark grey background (set in config as well).
       this.houseSpacing = 300;
       this.totalHouses = 10;
       this.houses = [];
+      // Global votes update only on a successful leaflet delivery.
       this.totalVotes = { blue: 0, red: 0, yellow: 0, green: 0, turquoise: 0 };
       this.playerLives = 3;
       this.gameOver = false;
@@ -127,22 +128,38 @@
         let house = this.physics.add.sprite(x, y, "house");
         house.setOrigin(0, 0);
         house.setImmovable(true);
-        // Random number of voters (1–4).
+        // Each house gets a random number of voters (1–4).
         house.votes = Phaser.Math.Between(1, 4);
         house.hitLetterbox = false;
         house.evaluated = false;
         house.collided = false;
-        // Full house rectangle.
+        // Define full house rectangle.
         house.fullRect = new Phaser.Geom.Rectangle(x, y, 80, 100);
-        // Door region (safe passage): door at (30,60) relative to house.
+        // Define door region (safe passage): door at (30,60) relative to house.
         house.doorRect = new Phaser.Geom.Rectangle(x + 30, y + 60, 20, 40);
-        // Letterbox region (target): letterbox at (34,75) relative to house.
+        // Define letterbox region (target): letterbox at (34,75) relative to house.
         house.letterbox = new Phaser.Geom.Rectangle(x + 34, y + 75, 12, 4);
-        // Create door number text above the door.
+        // Create door number text above the door (showing number of voters).
         house.doorNumberText = this.add.text(x + 40, y + 50, house.votes.toString(), { font: "16px Arial", fill: "#fff" }).setOrigin(0.5);
         this.houses.push(house);
         this.houseGroup.add(house);
       }
+
+      // Create a permanent HUD for vote counts.
+      // We'll show a block and a text for each party.
+      this.hudBlocks = {};
+      const hudStartX = 20, hudStartY = 20, blockSize = 20, blockGap = 10, partyGap = 120;
+      const parties = ["blue", "red", "yellow", "green", "turquoise"];
+      parties.forEach((party, index) => {
+        // Create a colored block.
+        let block = this.add.rectangle(hudStartX, hudStartY + index * partyGap, blockSize, blockSize, partyColors[party]).setOrigin(0, 0);
+        // Create a text to display the vote count.
+        let txt = this.add.text(hudStartX + blockSize + blockGap, hudStartY + index * partyGap, "0", { font: "16px Arial", fill: "#fff" });
+        this.hudBlocks[party] = { block, txt };
+      });
+
+      // Lives text remains in the upper HUD.
+      this.livesText = this.add.text(20, hudStartY + parties.length * partyGap, "Lives: " + this.playerLives, { font: "16px Arial", fill: "#fff" });
 
       // Set up keyboard input (arrows and WASD).
       this.cursors = this.input.keyboard.createCursorKeys();
@@ -157,12 +174,7 @@
       // Player-house collision.
       this.physics.add.overlap(this.player, this.houseGroup, this.handlePlayerHouseCollision, null, this);
 
-      // Set up HUD.
-      this.scoreBar = this.add.graphics();
-      this.livesText = this.add.text(10, 10, "", { font: "16px Arial", fill: "#fff" });
-      this.updateHUD();
-
-      // Game Over text.
+      // Set up Game Over text.
       this.gameOverText = this.add.text(400, 300, "Game Over\nClick to Play Again", { font: "32px Arial", fill: "#fff", align: "center" });
       this.gameOverText.setOrigin(0.5);
       this.gameOverText.setVisible(false);
@@ -173,21 +185,10 @@
       });
     }
     updateHUD() {
-      // Update the in-game score bar using blocks of colour.
-      this.scoreBar.clear();
-      // For each party, draw blocks representing the vote count.
-      const parties = ["blue", "red", "yellow", "green", "turquoise"];
-      let startX = 20;
-      let startY = 50;
-      parties.forEach((party) => {
-        let count = this.totalVotes[party] || 0;
-        for (let i = 0; i < count; i++) {
-          this.scoreBar.fillStyle(partyColors[party], 1);
-          let blockX = startX + i * 12;
-          this.scoreBar.fillRect(blockX, startY, 10, 10);
-        }
-        startX += 120;
-      });
+      // Update the permanent HUD for each party.
+      for (const party in this.hudBlocks) {
+        this.hudBlocks[party].txt.setText(this.totalVotes[party] ? this.totalVotes[party].toString() : "0");
+      }
       // Update lives text.
       this.livesText.setText("Lives: " + this.playerLives);
     }
@@ -270,7 +271,7 @@
         let y = chartY - barHeight;
         graphics.fillStyle(scoreColors[entry.party], 1);
         graphics.fillRect(x, y, barWidth, barHeight);
-        // Instead of party names, display a block of colour.
+        // Instead of party names, display a block.
         this.add.rectangle(x + barWidth / 2, chartY + 30, 20, 20, scoreColors[entry.party]).setOrigin(0.5);
         // Display vote count below the block.
         this.add.text(x + barWidth / 2, chartY + 55, entry.score.toString(), { font: "20px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
@@ -287,7 +288,7 @@
     }
     update(time, delta) {
       if (this.gameOver) return;
-      // Allow horizontal movement via arrow keys and WASD.
+      // Allow horizontal movement via arrow keys or WASD.
       if (this.cursors.left.isDown || this.wasd.left.isDown) {
         this.player.setVelocityX(-150);
       } else if (this.cursors.right.isDown || this.wasd.right.isDown) {
@@ -303,7 +304,7 @@
       } else {
         this.player.setVelocityY(0);
       }
-      // Launch a leaflet on spacebar press.
+      // Launch a leaflet on space press.
       if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.leaflet) {
         this.leaflet = this.physics.add.sprite(this.player.x, this.player.y - 15, "leaflet");
         this.leaflet.setVelocityY(-300);
@@ -425,9 +426,9 @@
         let y = chartY - barHeight;
         graphics.fillStyle(scoreColors[entry.party], 1);
         graphics.fillRect(x, y, barWidth, barHeight);
-        // Display a block of the party's colour.
+        // Instead of party names, display a colored block.
         this.add.rectangle(x + barWidth / 2, chartY + 30, 20, 20, scoreColors[entry.party]).setOrigin(0.5);
-        // Display the vote count below the block.
+        // Display vote count below the block.
         this.add.text(x + barWidth / 2, chartY + 55, entry.score.toString(), { font: "20px Arial", fill: "#fff", align: "center" }).setOrigin(0.5);
       }, this);
       if (!this.playerLost) {
