@@ -360,6 +360,7 @@ const partyColors = {
     type: Phaser.AUTO,
     width: 480,
     height: 900,
+    parent: "game-container",  // Ensures the game renders inside the div with id "game-container"
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
@@ -370,4 +371,5 @@ const partyColors = {
   };
   
   const game = new Phaser.Game(config);
+  
   
