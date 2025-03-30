@@ -128,6 +128,9 @@ export default class GameScene extends Phaser.Scene {
     fireLeaflet() {
       this.leaflet = this.physics.add.sprite(this.player.x, this.player.y - 15, "leaflet");
       this.leaflet.setVelocityY(-300);
+
+        // GSAP tween: make the player pop slightly when firing.
+        gsap.to(this.player.scale, { duration: 0.1, x: 1.2, y: 1.2, yoyo: true, repeat: 1 });
     }
   
     updateHUD() {
@@ -135,6 +138,10 @@ export default class GameScene extends Phaser.Scene {
         this.hudBlocks[party].txt.setText(this.totalVotes[party] ? this.totalVotes[party].toString() : "0");
       }
       this.livesText.setText("Lives: " + this.playerLives);
+
+        // When updating the HUD after a successful hit:
+        gsap.fromTo(this.player, { scale: 1 }, { scale: 1.1, duration: 0.2, yoyo: true, repeat: 1 });
+
     }
   
     handlePlayerHouseCollision(player, house) {
